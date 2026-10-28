@@ -1,0 +1,13 @@
+{
+  "appId": "com.digiteq.studio",
+  "appName": "Digiteq Studio",
+  "webDir": "www",
+  "server": {
+    "url": "http://192.168.0.112:8787",
+    "cleartext": true,
+    "androidScheme": "http"
+  },
+  "android": {
+    "backgroundColor": "#050506"
+  }
+}

@@ -1,0 +1,18 @@
+# Dependencies and builds
+node_modules/
+web/dist/
+*.apk
+*.aab
+
+# Secrets: API key, login hash, session secret (see server/.env.example)
+.env
+.env.*
+!.env.example
+
+# Customer data: uploaded logos, generated images and videos, brand profiles
+server/data/
+
+# Local tooling
+.claude/
+*.log
+.DS_Store

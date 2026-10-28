@@ -1,0 +1,382 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #050506;
+  --surface: rgba(22, 22, 26, 0.7);
+  --surface-solid: #141417;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+  --text: #f5f5f7;
+  --text-2: #a1a1a6;
+  --text-3: #6e6e73;
+  --violet: #8b7bff;
+  --pink: #ff7ad9;
+  --cyan: #5ee7ff;
+  --green: #30d158;
+  --amber: #ffd60a;
+  --red: #ff453a;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Critically damped spring (Apple default: damping 1.0). Falls back to --ease. */
+  --spring: var(--ease);
+  color-scheme: dark;
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --spring: linear(0, 0.049 5%, 0.156 10%, 0.283 15%, 0.408 20%, 0.62 30%, 0.769 40%, 0.864 50%, 0.922 60%, 0.956 70%, 0.976 80%, 0.987 90%, 1);
+  }
+}
+
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  /* App feel on phones: no pull-to-refresh or rubber-band bounce on the page itself. */
+  html,
+  body {
+    overscroll-behavior: none;
+    height: 100%;
+    overflow: hidden;
+  }
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  ::selection {
+    background: rgba(139, 123, 255, 0.35);
+  }
+  :focus-visible {
+    outline: 2px solid rgba(139, 123, 255, 0.9);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* ---- Type ---- */
+  .display {
+    font-size: clamp(2.6rem, 7.2vw, 5.75rem);
+    line-height: 0.98;
+    letter-spacing: -0.048em;
+    font-weight: 600;
+  }
+  .title {
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    font-weight: 600;
+  }
+  .serif {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.01em;
+    color: var(--text-2);
+  }
+  .mono-num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Materials ---- */
+  .glass {
+    background: var(--surface);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    backdrop-filter: blur(28px) saturate(160%);
+    border: 1px solid var(--hairline);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 40px 100px -30px rgba(0, 0, 0, 0.75);
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px];
+    color: var(--text-2);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--hairline);
+  }
+
+  /* ---- Controls ---- */
+  .press {
+    transition: transform 0.5s var(--spring), background-color 0.2s, color 0.2s, opacity 0.2s;
+  }
+  .press:active:not(:disabled) {
+    transform: scale(0.96);
+    transition-duration: 0.08s;
+  }
+  .btn {
+    @apply press inline-flex h-9 items-center justify-center gap-2 rounded-full px-4 text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-light {
+    @apply btn bg-white text-black hover:bg-white/90;
+  }
+  .btn-quiet {
+    @apply btn text-[color:var(--text)];
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--hairline);
+  }
+  .btn-quiet:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .btn-ghost-icon {
+    @apply press grid h-8 w-8 place-items-center rounded-full;
+    color: var(--text-2);
+  }
+  .btn-ghost-icon:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+  }
+  /* Composer dock: content fades out under it instead of a hard edge. */
+  .dock {
+    background: linear-gradient(to top, var(--bg) 55%, transparent);
+  }
+  .seg {
+    @apply inline-flex items-center rounded-full p-0.5;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--hairline);
+  }
+  .seg-item {
+    @apply press h-7 rounded-full px-2.5 text-[12px] font-medium disabled:cursor-not-allowed disabled:opacity-30;
+    color: var(--text-2);
+  }
+  .seg-item:hover:not(:disabled) {
+    color: var(--text);
+  }
+  .seg-item[aria-checked='true'] {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  /* Iridescent edge: fades in on focus or while rendering. */
+  .halo {
+    position: relative;
+    isolation: isolate;
+  }
+  .halo::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(from var(--angle), var(--violet), var(--pink), var(--cyan), var(--violet));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    opacity: 0;
+    transition: opacity 0.6s var(--ease);
+    animation: spin-angle 5s linear infinite;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .halo:focus-within::before,
+  .halo.is-live::before {
+    opacity: 0.9;
+  }
+
+  /* ---- Hero light ---- */
+  .aurora {
+    position: absolute;
+    inset: -25% -10% auto;
+    height: 90vh;
+    background:
+      radial-gradient(38% 48% at 28% 42%, rgba(139, 123, 255, 0.3), transparent 70%),
+      radial-gradient(34% 44% at 72% 34%, rgba(255, 122, 217, 0.2), transparent 70%),
+      radial-gradient(30% 40% at 52% 72%, rgba(94, 231, 255, 0.13), transparent 70%);
+    filter: blur(40px);
+    animation: drift 24s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+
+  /* ---- Film wall: a CSS 3D floor of frames receding to a horizon ---- */
+  .wall {
+    position: absolute;
+    inset: 30% 0 0 0;
+    perspective: 650px;
+    perspective-origin: 50% 0%;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0.7;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 30%, #000 75%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 30%, #000 75%, transparent 100%);
+  }
+  .wall-plane {
+    position: absolute;
+    left: 50%;
+    bottom: -40px;
+    width: 2400px;
+    height: 1000px; /* < one copy of the track (~1074px), so the loop never shows a gap */
+    margin-left: -1200px;
+    overflow: hidden;
+    transform: rotateX(74deg);
+    transform-origin: 50% 100%;
+  }
+  .wall-track {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 20px;
+    padding-bottom: 20px; /* = gap, so -50% lands exactly on the second copy */
+    animation: wall-scroll 70s linear infinite;
+  }
+  /* Keeps type readable over the wall. */
+  .scrim {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(60% 50% at 50% 38%, rgba(5, 5, 6, 0.9), rgba(5, 5, 6, 0.4) 60%, transparent 85%),
+      linear-gradient(to bottom, var(--bg), transparent 30%, transparent 80%, var(--bg));
+    pointer-events: none;
+  }
+  .wall-tile {
+    aspect-ratio: 16 / 9;
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 20px 50px -10px rgba(0, 0, 0, 0.8);
+  }
+  .wall-tile video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .grain::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.12;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  /* ---- Stage: the current video, tilted in 3D, settles flat on hover ---- */
+  .stage {
+    perspective: 2000px;
+  }
+  .frame {
+    transform: rotateX(7deg) scale(0.985);
+    transform-origin: 50% 100%;
+    transition: transform 1s var(--spring);
+    -webkit-box-reflect: below 6px linear-gradient(transparent 72%, rgba(255, 255, 255, 0.1));
+  }
+  .stage:hover .frame,
+  .stage:focus-within .frame {
+    transform: none;
+  }
+  .ambient {
+    position: absolute;
+    inset: 6% 4%;
+    filter: blur(70px) saturate(140%);
+    opacity: 0.55;
+    transform: scale(1.08);
+    pointer-events: none;
+  }
+  .rendering-bg {
+    background:
+      radial-gradient(60% 80% at 20% 30%, rgba(139, 123, 255, 0.35), transparent 60%),
+      radial-gradient(50% 70% at 80% 70%, rgba(255, 122, 217, 0.25), transparent 60%),
+      radial-gradient(40% 60% at 60% 20%, rgba(94, 231, 255, 0.18), transparent 60%),
+      #0b0b0e;
+    background-size: 160% 160%;
+    animation: mesh 10s ease-in-out infinite alternate;
+  }
+  .scan {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    animation: scan 1.8s var(--ease) infinite;
+  }
+
+  /* ---- Library ---- */
+  .lift {
+    transition: transform 0.7s var(--spring), box-shadow 0.4s var(--ease);
+  }
+  .lift:hover {
+    transform: perspective(900px) rotateX(3deg) translateY(-4px);
+    box-shadow: 0 30px 60px -25px rgba(0, 0, 0, 0.9);
+  }
+
+  .appear {
+    animation: appear 0.7s var(--spring) both;
+  }
+}
+
+@keyframes spin-angle {
+  to {
+    --angle: 360deg;
+  }
+}
+@keyframes wall-scroll {
+  to {
+    transform: translateY(-50%);
+  }
+}
+@keyframes drift {
+  to {
+    transform: translate3d(3%, 4%, 0) scale(1.06);
+  }
+}
+@keyframes mesh {
+  to {
+    background-position: 100% 100%;
+  }
+}
+@keyframes scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+    filter: blur(6px);
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.15s !important;
+  }
+  .frame,
+  .lift:hover {
+    transform: none !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--surface-solid);
+    backdrop-filter: none;
+  }
+}

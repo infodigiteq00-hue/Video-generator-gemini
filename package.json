@@ -1,0 +1,14 @@
+{
+  "name": "digiteq-studio",
+  "private": true,
+  "scripts": {
+    "setup": "npm install && npm install --prefix server && npm install --prefix web",
+    "dev": "concurrently -k -n api,web -c magenta,cyan \"npm run dev --prefix server\" \"npm run dev --prefix web\"",
+    "build": "npm run build --prefix web",
+    "start": "npm start --prefix server",
+    "tunnel": "cloudflared tunnel --url http://localhost:8787"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}

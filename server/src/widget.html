@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #ffffff; --fg: #0d0d12; --muted: #6b6b78; --border: rgba(0,0,0,.1); --chip: rgba(0,0,0,.05);
+    --accent1: #8b5cf6; --accent2: #d946ef; --accent3: #22d3ee; --danger: #e5484d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #111116; --fg: #f4f4f6; --muted: #9a9aa8; --border: rgba(255,255,255,.12); --chip: rgba(255,255,255,.06); }
+  }
+  :root[data-theme="dark"] { --bg: #111116; --fg: #f4f4f6; --muted: #9a9aa8; --border: rgba(255,255,255,.12); --chip: rgba(255,255,255,.06); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .card { padding: 14px; }
+  .head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .logo { width: 22px; height: 22px; border-radius: 7px; background: conic-gradient(from 200deg, var(--accent1), var(--accent2), var(--accent3), var(--accent1)); flex: none; }
+  .title { font-weight: 600; }
+  .chips { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .chip { font-size: 12px; color: var(--muted); background: var(--chip); border-radius: 999px; padding: 2px 8px; }
+  .stage { position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #08080c; display: grid; place-items: center; }
+  .stage video { width: 100%; height: 100%; display: block; object-fit: contain; background: #000; }
+  .pending { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: #eceef3; padding: 16px; }
+  .pending::before { content: ""; position: absolute; inset: -40%; background: conic-gradient(from 0deg, transparent, rgba(139,92,246,.55), rgba(217,70,239,.45), rgba(34,211,238,.4), transparent 70%); animation: spin 6s linear infinite; filter: blur(40px); }
+  .pending > div { position: relative; }
+  .ring { width: 54px; height: 54px; margin: 0 auto 12px; border-radius: 50%; padding: 3px; background: conic-gradient(var(--accent1), var(--accent2), var(--accent3), var(--accent1)); animation: spin 1.6s linear infinite; -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0); }
+  .big { font-size: 16px; font-weight: 600; }
+  .small { font-size: 12.5px; opacity: .75; }
+  .prompt { margin: 10px 0 0; color: var(--muted); font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  a.btn { text-decoration: none; color: var(--fg); border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; font-size: 13px; font-weight: 500; }
+  a.btn.primary { color: #fff; border: 0; background: linear-gradient(135deg, var(--accent1), var(--accent2)); }
+  .error { color: var(--danger); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .ring, .pending::before { animation: none; } }
+</style>
+</head>
+<body>
+<div class="card" id="app">
+  <div class="head"><div class="logo"></div><div class="title">Digiteq Studio</div></div>
+  <div class="stage" style="aspect-ratio:16/9"><div class="pending"><div><div class="ring"></div><div class="big">Preparing…</div></div></div></div>
+</div>
+<script>
+(() => {
+  const app = document.getElementById('app');
+  let data = null, pollTimer = null, tickTimer = null, startedAt = Date.now(), rendered = '';
+
+  // ---- Host bridge: MCP Apps (postMessage JSON-RPC) with ChatGPT window.openai fallback ----
+  let nextId = 1;
+  const pending = new Map();
+  function rpc(method, params, timeoutMs = 4000) {
+    const id = nextId++;
+    window.parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+      setTimeout(() => pending.delete(id) && reject(new Error('timeout')), timeoutMs);
+    });
+  }
+  function notify(method, params) { window.parent.postMessage({ jsonrpc: '2.0', method, params }, '*'); }
+
+  window.addEventListener('message', (e) => {
+    if (e.source !== window.parent) return;
+    const m = e.data;
+    if (!m || m.jsonrpc !== '2.0') return;
+    if (m.id != null && pending.has(m.id)) {
+      const p = pending.get(m.id); pending.delete(m.id);
+      m.error ? p.reject(m.error) : p.resolve(m.result);
+      return;
+    }
+    if (m.method === 'ui/notifications/tool-result') receive(m.params && m.params.structuredContent);
+    if (m.method === 'ui/notifications/host-context-changed') applyTheme(m.params && m.params.theme);
+  });
+
+  rpc('ui/initialize', { protocolVersion: '2026-01-26', appInfo: { name: 'digiteq-video-player', version: '1.0.0' }, appCapabilities: {} })
+    .then((r) => { applyTheme(r && r.hostContext && r.hostContext.theme); notify('ui/notifications/initialized', {}); })
+    .catch(() => {});
+
+  function fromOpenAI() {
+    if (!window.openai) return;
+    applyTheme(window.openai.theme);
+    if (window.openai.toolOutput) receive(window.openai.toolOutput);
+  }
+  window.addEventListener('openai:set_globals', fromOpenAI);
+  fromOpenAI();
+
+  function applyTheme(theme) { if (theme === 'dark' || theme === 'light') document.documentElement.dataset.theme = theme; }
+
+  // ---- State ----
+  function receive(payload) {
+    if (!payload || !payload.job) return;
+    if (!data || data.job.id !== payload.job.id) startedAt = Date.now() - (payload.job.elapsedSeconds || 0) * 1000;
+    data = payload;
+    render();
+    schedulePoll();
+  }
+
+  function schedulePoll() {
+    clearTimeout(pollTimer);
+    if (!data || data.job.status === 'succeeded' || data.job.status === 'failed') return;
+    pollTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(data.statusUrl);
+        if (res.ok) {
+          const job = await res.json();
+          const origin = data.studioUrl;
+          data = { ...data, job: { ...job, videoUrl: job.videoUrl && origin + job.videoUrl, imageUrl: job.imageUrl && origin + job.imageUrl } };
+          render();
+        }
+      } catch (_) { /* network blip: try again */ }
+      schedulePoll();
+    }, 4000);
+  }
+
+  // ---- View ----
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function render() {
+    const j = data.job;
+    const ratio = j.aspectRatio === '9:16' ? '9/16' : '16/9';
+    const maxW = j.aspectRatio === '9:16' ? 'max-width:320px;margin:0 auto;' : '';
+    let stage;
+    if (j.status === 'succeeded') {
+      stage = `<video src="${esc(j.videoUrl)}" controls autoplay loop playsinline></video>`;
+    } else if (j.status === 'failed') {
+      stage = `<div class="pending"><div><div class="big">Generation failed</div><div class="small error" style="color:#ff8a8f">${esc(j.error || 'Unknown error')}</div></div></div>`;
+    } else {
+      stage = `<div class="pending"><div><div class="ring"></div><div class="big">Rendering your video</div><div class="small"><span id="elapsed">0:00</span> · usually 1–3 minutes</div></div></div>`;
+    }
+    const actions = j.status === 'succeeded'
+      ? `<div class="actions"><a class="btn primary" href="${esc(j.videoUrl)}" download target="_blank" rel="noopener">Download MP4</a><a class="btn" href="${esc(data.studioUrl)}" target="_blank" rel="noopener">Open in Digiteq Studio</a></div>`
+      : '';
+    const html = `
+      <div class="head"><div class="logo"></div><div class="title">Digiteq Studio</div>
+        <div class="chips"><span class="chip">${esc(j.durationSeconds)}s</span><span class="chip">${esc(j.resolution)}</span><span class="chip">${esc(j.aspectRatio)}</span>${j.estimatedCost ? `<span class="chip">$${j.estimatedCost.toFixed(2)}</span>` : ''}</div></div>
+      <div class="stage" style="aspect-ratio:${ratio};${maxW}">${stage}</div>
+      <p class="prompt">${esc(j.prompt)}</p>${actions}`;
+    // Re-render only when something visible changed, so the video doesn't restart.
+    const key = `${j.id}|${j.status}|${j.videoUrl}|${j.error}`;
+    if (key !== rendered) { app.innerHTML = html; rendered = key; reportSize(); }
+    clearInterval(tickTimer);
+    if (j.status === 'queued' || j.status === 'running') {
+      const tick = () => {
+        const s = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+        const el = document.getElementById('elapsed');
+        if (el) el.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      };
+      tick(); tickTimer = setInterval(tick, 1000);
+    }
+  }
+
+  // Measure the card, not the document: the document grows with the iframe and would feed back.
+  let lastHeight = 0;
+  function reportSize() {
+    const h = Math.ceil(app.getBoundingClientRect().height);
+    if (h === lastHeight) return;
+    lastHeight = h;
+    notify('ui/notifications/size-changed', { height: h });
+    if (window.openai && window.openai.notifyIntrinsicHeight) window.openai.notifyIntrinsicHeight(h);
+  }
+  new ResizeObserver(reportSize).observe(app);
+})();
+</script>
+</body>
+</html>
