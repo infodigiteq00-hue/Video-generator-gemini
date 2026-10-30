@@ -18,8 +18,12 @@ const WIDGET_HTML = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 export function mountMcp(app) {
-  const route = process.env.MCP_TOKEN ? `/mcp/${process.env.MCP_TOKEN}` : '/mcp';
-  if (!process.env.MCP_TOKEN) console.warn('MCP_TOKEN not set: /mcp is open to anyone who can reach this server');
+  // Without a secret token the endpoint would let anyone generate (and bill) videos, so it stays off.
+  if (!process.env.MCP_TOKEN) {
+    console.warn('ChatGPT app (/mcp) is off: set MCP_TOKEN to enable it');
+    return;
+  }
+  const route = `/mcp/${process.env.MCP_TOKEN}`;
 
   app.post(route, express.json({ limit: '2mb' }), async (req, res) => {
     // Stateless: a fresh server per request, bound to the public origin it was reached on.

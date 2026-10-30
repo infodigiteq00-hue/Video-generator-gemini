@@ -28,7 +28,10 @@ const upload = multer({
     IMAGE_TYPES.includes(file.mimetype) ? cb(null, true) : cb(Object.assign(new Error('Image must be PNG, JPEG or WebP'), { status: 400 })),
 });
 
-app.set('trust proxy', 'loopback'); // correct client IPs and https detection behind a tunnel or proxy
+// Correct client IPs and https detection behind a proxy. Railway sits one proxy hop in front (TRUST_PROXY=1).
+const trust = process.env.TRUST_PROXY;
+app.set('trust proxy', trust === undefined ? 'loopback' : /^\d+$/.test(trust) ? Number(trust) : trust);
+app.get('/healthz', (_req, res) => res.send('ok')); // for the host's health check
 mountAuth(app);
 app.use('/api', requireAuth);
 
