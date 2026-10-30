@@ -45,6 +45,7 @@
   body {
     overscroll-behavior: none;
     height: 100%;
+    height: 100dvh; /* follows the phone's address bar as it shows and hides */
     overflow: hidden;
   }
   #root {
@@ -378,5 +379,12 @@
   .glass {
     background: var(--surface-solid);
     backdrop-filter: none;
+  }
+}
+
+/* Phones: calmer film wall so the headline stays readable. */
+@media (max-width: 640px) {
+  .wall {
+    opacity: 0.3;
   }
 }

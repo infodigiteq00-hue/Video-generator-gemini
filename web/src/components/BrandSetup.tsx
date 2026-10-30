@@ -169,7 +169,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
                 maxLength={80}
                 autoFocus
                 placeholder="Acme Prints"
-                className="w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[15px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]"
+                className="w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[16px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]"
               />
             </label>
 
@@ -220,7 +220,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
                 rows={2}
                 maxLength={500}
                 placeholder="We manufacture commercial printing machines"
-                className="w-full resize-none rounded-2xl bg-white/[0.05] px-4 py-3 text-[15px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]"
+                className="w-full resize-none rounded-2xl bg-white/[0.05] px-4 py-3 text-[16px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]"
               />
             </label>
 
@@ -234,7 +234,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
                 inputMode="url"
                 maxLength={300}
                 placeholder="www.yourcompany.com"
-                className="w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[15px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]"
+                className="w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[16px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]"
               />
             </label>
 

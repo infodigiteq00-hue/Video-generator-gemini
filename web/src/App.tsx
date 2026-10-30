@@ -349,10 +349,10 @@ export default function App() {
             >
               <Thread items={items} h={handlers} after={changeOffer || undefined} />
             </div>
-            <div className="dock shrink-0 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
+            <div className="dock shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
               <div className="mx-auto max-w-3xl">
                 {composer}
-                <p className="mt-2 text-center text-[11.5px] text-[color:var(--text-3)]">
+                <p className="mt-2 hidden text-center text-[11.5px] text-[color:var(--text-3)] sm:block">
                   {provider === 'mock' ? 'Demo mode: placeholder results, no API cost.' : `Designed for ${brand.name}`}
                 </p>
               </div>

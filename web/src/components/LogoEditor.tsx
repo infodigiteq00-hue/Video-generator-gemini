@@ -80,7 +80,7 @@ export function LogoEditor({ logoUrl, initial, onChange }: Props) {
         <span
           aria-label="Resize logo"
           onPointerDown={(e) => down(e, 'resize')}
-          className="absolute -bottom-2.5 -right-2.5 h-5 w-5 cursor-nwse-resize rounded-full border-2 border-black/40 bg-white shadow"
+          className="absolute -bottom-1.5 -right-1.5 h-7 w-7 cursor-nwse-resize rounded-full border-2 border-black/40 bg-white shadow sm:h-5 sm:w-5"
         />
       </div>
     </div>

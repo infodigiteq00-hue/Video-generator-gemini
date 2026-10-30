@@ -25,7 +25,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
   }
 
   const field =
-    'w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[15px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]';
+    'w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[16px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]';
 
   return (
     <div className="relative isolate grid h-full place-items-center overflow-y-auto overscroll-contain p-4">

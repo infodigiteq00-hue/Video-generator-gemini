@@ -162,39 +162,40 @@ export function Composer({ config, placeholder, editing, draft, autoFocus, setti
               className="block max-h-40 min-h-[56px] w-full resize-none bg-transparent px-5 pt-4 text-[16px] leading-relaxed tracking-[-0.01em] text-[color:var(--text)] outline-none [field-sizing:content] placeholder:text-[color:var(--text-3)] focus-visible:outline-none"
             />
           </>
-        ) : (
-          <div className="relative px-2.5 pt-2.5">
-            <label htmlFor="festival" className="sr-only">
-              Festival
-            </label>
-            <select
-              id="festival"
-              autoFocus={autoFocus}
-              value={festival}
-              onChange={(e) => setFestival(e.target.value)}
-              className="block h-12 w-full cursor-pointer appearance-none rounded-2xl bg-white/[0.05] pl-4 pr-10 text-[16px] font-medium tracking-[-0.01em] text-[color:var(--text)] outline-none ring-1 ring-white/[0.08] hover:bg-white/[0.08] focus-visible:ring-[color:var(--violet)]"
-            >
-              {festivals.map((f) => (
-                <option key={f} value={f} className="bg-neutral-900">
-                  {f}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-6 top-1/2 h-4 w-4 translate-y-[2px] text-[color:var(--text-2)]" />
-          </div>
-        )}
-        <div className="flex items-center gap-1.5 px-2.5 pb-2.5 pt-1">
+        ) : null}
+        <div className="flex items-center gap-1.5 p-2">
+          {!editing && (
+            <div className="relative min-w-0 flex-1">
+              <label htmlFor="festival" className="sr-only">
+                Festival
+              </label>
+              <select
+                id="festival"
+                autoFocus={autoFocus}
+                value={festival}
+                onChange={(e) => setFestival(e.target.value)}
+                className="block h-10 w-full cursor-pointer appearance-none truncate rounded-full bg-white/[0.05] pl-4 pr-9 text-[16px] font-medium tracking-[-0.01em] text-[color:var(--text)] outline-none ring-1 ring-white/[0.08] hover:bg-white/[0.08] focus-visible:ring-[color:var(--violet)]"
+              >
+                {festivals.map((f) => (
+                  <option key={f} value={f} className="bg-neutral-900">
+                    {f}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3.5 top-3 h-4 w-4 text-[color:var(--text-2)]" />
+            </div>
+          )}
           <button
             type="button"
             aria-expanded={showSettings}
-            className={`btn-ghost-icon ${showSettings ? 'bg-white/10 text-[color:var(--text)]' : ''}`}
+            className={`btn-ghost-icon h-10 w-10 shrink-0 ${showSettings ? 'bg-white/10 text-[color:var(--text)]' : ''}`}
             title="Shape, size and video length"
             aria-label="Settings"
             onClick={() => setShowSettings((v) => !v)}
           >
             <SlidersHorizontal className="h-[17px] w-[17px]" />
           </button>
-          <span className="mono-num text-[12px] text-[color:var(--text-3)]">
+          <span className="mono-num hidden whitespace-nowrap text-[12px] text-[color:var(--text-3)] sm:inline">
             {settings.aspectRatio === '9:16' ? '9:16 Reel' : '16:9 Wide'} · {settings.durationSeconds}s video
           </span>
           {editing ? (
@@ -203,12 +204,12 @@ export function Composer({ config, placeholder, editing, draft, autoFocus, setti
               disabled={!value || busy || !config}
               aria-label="Send change"
               title="Send (Enter)"
-              className="press ml-auto grid h-9 w-9 place-items-center rounded-full bg-white text-black disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/40"
+              className="press ml-auto grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-black disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/40"
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.4} />}
             </button>
           ) : (
-            <button type="submit" disabled={busy || !config} className="btn-light ml-auto h-9 px-5">
+            <button type="submit" disabled={busy || !config} className="btn-light h-10 shrink-0 px-4">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Generate
             </button>
           )}

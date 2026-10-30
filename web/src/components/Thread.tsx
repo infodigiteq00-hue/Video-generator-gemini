@@ -79,8 +79,8 @@ function UserBubble({ text, imageUrl, fromAbove }: { text: string; imageUrl?: st
 
 function Assistant({ children }: { children: React.ReactNode }) {
   return (
-    <div className="appear flex gap-3 sm:gap-4">
-      <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.06] ring-1 ring-white/10">
+    <div className="appear flex gap-4">
+      <div className="mt-0.5 hidden h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.06] ring-1 ring-white/10 sm:grid">
         <Logo size={18} />
       </div>
       <div className="min-w-0 flex-1">{children}</div>
@@ -154,13 +154,11 @@ function JobResult({ job, h }: { job: Job; h: Handlers }) {
                 ? 'And here’s the video.'
                 : 'Here’s your video.'
               : job.brandId
-                ? job.makesVideo && !job.followUpError
-                  ? 'Here’s your post. The video comes next.'
-                  : 'Here’s your post.'
+                ? 'Here’s your post.'
                 : 'Here’s your image. Want it moving? Hit Animate.'}
       </p>
 
-      <div className="relative" style={{ maxWidth: portrait ? 300 : 640 }}>
+      <div className="relative" style={{ maxWidth: portrait ? 'min(340px, calc((100dvh - 240px) * 9 / 16))' : 640 }}>
         {job.status === 'succeeded' && isVideo && job.outputUrl && (
           <video src={job.outputUrl} autoPlay muted loop playsInline aria-hidden className="ambient h-full w-full rounded-[32px] object-cover" />
         )}
@@ -247,7 +245,7 @@ function JobResult({ job, h }: { job: Job; h: Handlers }) {
 
 export function Thread({ items, h, after }: { items: Item[]; h: Handlers; after?: React.ReactNode }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 pb-10 pt-8 sm:px-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-5 sm:gap-8 sm:px-6 sm:pb-10 sm:pt-8">
       {items.map((item) =>
         item.type === 'job' ? (
           <div key={item.job.id} className="flex flex-col gap-6">
