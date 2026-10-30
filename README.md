@@ -82,11 +82,15 @@ To add a provider (for example Gemini Omni Flash or the Vertex AI GA Veo models)
 
 Veo 3.1 Lite preview was shut down by Google on 22 Oct 2026; video moved to Gemini Omni Flash.
 
+## Live
+
+https://digiteq-studio-production.up.railway.app (Railway, see `DEPLOY.md`). Every push to `main` redeploys.
+
 ## Android app (APK)
 
 `mobile/` is a Capacitor wrapper that opens the Digiteq Studio server inside a native Android app (own icon, splash screen, no pull-to-refresh, downloads saved to the phone's Downloads folder).
 
-- The server address is `server.url` in `mobile/capacitor.config.json` (currently the laptop on Wi-Fi, `http://192.168.0.112:8787`). Change it to your hosted https address before giving the app to clients.
+- The server address is `server.url` in `mobile/capacitor.config.json` (the live Railway address).
 - Rebuild: `cd mobile && npm run apk` (needs the Android SDK at `~/Android/Sdk` and JDK 21). Output: `mobile/android/app/build/outputs/apk/debug/app-debug.apk`.
 - This is a debug build for testing. The Play Store needs a signed release build (AAB).
 
