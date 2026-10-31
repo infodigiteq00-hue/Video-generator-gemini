@@ -99,6 +99,7 @@ export const api = {
     fd.append('featured', JSON.stringify(input.featured));
     fd.append('contact', JSON.stringify(input.contact));
     fd.append('endCard', String(input.endCard));
+    fd.append('colors', JSON.stringify(input.colors));
     if (input.logo) fd.append('logo', input.logo, input.logo.name);
     return request<Brand>(input.id ? `/api/brands/${encodeURIComponent(input.id)}` : '/api/brands', {
       method: input.id ? 'PUT' : 'POST',

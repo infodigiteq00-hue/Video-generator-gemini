@@ -51,7 +51,11 @@ export function Sidebar({ open, onClose, chats, chatId, page, onNewChat, onOpenC
           </button>
           {brand ? (
             <button className={`${row} mt-2 hover:bg-white/[0.05]`} onClick={onEditBrand} title="Edit your brand">
-              <img src={brand.logoUrl} alt="" className="h-7 w-9 shrink-0 rounded-md bg-white/90 object-contain p-0.5" />
+              {brand.logoUrl ? (
+                <img src={brand.logoUrl} alt="" className="h-7 w-9 shrink-0 rounded-md bg-white/90 object-contain p-0.5" />
+              ) : (
+                <span className="h-7 w-9 shrink-0 rounded-md" style={{ background: brand.colors[0] ?? '#444' }} />
+              )}
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium text-[color:var(--text)]">{brand.name || 'Your brand'}</span>
                 <span className="flex items-center gap-1 pt-0.5">

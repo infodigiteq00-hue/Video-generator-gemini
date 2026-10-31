@@ -8,7 +8,7 @@ interface Props {
   /** The brand post (image) and the video made from it, if started. */
   image: Job;
   video: Job | null;
-  logoUrl: string;
+  logoUrl: string | null;
   onPlaceLogo: (job: Job, place: LogoPlace | null) => Promise<void>;
   onRetry: () => void;
   onMakeVideo: () => void;
@@ -62,7 +62,7 @@ export function Waiting({ request, since, image, video }: { request: string; sin
 }
 
 /** One finished (or rendering) result with its logo placement and download. */
-function Media({ job, label, logoUrl, onPlaceLogo }: { job: Job; label: string; logoUrl: string; onPlaceLogo: Props['onPlaceLogo'] }) {
+function Media({ job, label, logoUrl, onPlaceLogo }: { job: Job; label: string; logoUrl: string | null; onPlaceLogo: Props['onPlaceLogo'] }) {
   const [editing, setEditing] = useState(false);
   const [place, setPlace] = useState<LogoPlace | null>(null);
   const [saving, setSaving] = useState(false);
@@ -106,7 +106,7 @@ function Media({ job, label, logoUrl, onPlaceLogo }: { job: Job; label: string; 
             </div>
           </div>
         )}
-        {editing && <LogoEditor logoUrl={logoUrl} initial={job.logo ?? null} onChange={setPlace} />}
+        {editing && logoUrl && <LogoEditor logoUrl={logoUrl} initial={job.logo ?? null} onChange={setPlace} />}
       </div>
 
       {job.status === 'succeeded' && (
@@ -125,10 +125,12 @@ function Media({ job, label, logoUrl, onPlaceLogo }: { job: Job; label: string; 
             </>
           ) : (
             <>
-              <button className={job.logo ? 'btn-quiet h-9' : 'btn-light h-9'} onClick={() => setEditing(true)}>
-                <Stamp className="h-4 w-4" /> {job.logo ? 'Move logo' : 'Place your logo'}
-              </button>
-              <a className={job.logo ? 'btn-light h-9' : 'btn-quiet h-9'} href={`/api/jobs/${job.id}/download`} download>
+              {logoUrl && (
+                <button className={job.logo ? 'btn-quiet h-9' : 'btn-light h-9'} onClick={() => setEditing(true)}>
+                  <Stamp className="h-4 w-4" /> {job.logo ? 'Move logo' : 'Place your logo'}
+                </button>
+              )}
+              <a className={job.logo || !logoUrl ? 'btn-light h-9' : 'btn-quiet h-9'} href={`/api/jobs/${job.id}/download`} download>
                 <Download className="h-4 w-4" /> Download
               </a>
             </>
@@ -148,7 +150,6 @@ export function Post({ image, video, logoUrl, onPlaceLogo, onRetry, onMakeVideo,
     <div className="mx-auto w-full max-w-3xl">
       <div className="mb-6 text-center">
         <h1 className="text-[clamp(1.6rem,4vw,2.2rem)] font-semibold tracking-[-0.03em]">{image.title ?? image.request}</h1>
-        {image.featured && <p className="mt-1 text-[14px] text-[color:var(--text-2)]">Featuring {image.featured}</p>}
       </div>
 
       {image.status === 'failed' ? (

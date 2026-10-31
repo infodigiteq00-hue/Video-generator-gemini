@@ -16,7 +16,7 @@ interface Props {
 const STEPS = [
   { title: 'What does your business do?', hint: 'Every post is designed around your business, so tell us in a sentence or two.' },
   { title: 'What should we feature?', hint: 'Add the products or services you want in your posts. We pick one for each post and rotate.' },
-  { title: 'Your name and logo', hint: 'Your name goes in the greeting and your logo goes on every post.' },
+  { title: 'Your name and logo', hint: 'Your name goes in the greeting. Upload your logo, or pick your brand colours if you don’t have one.' },
   { title: 'Contact details', hint: 'Optional. We add them to a closing card at the end of your videos, so customers know how to reach you.' },
 ];
 
@@ -50,6 +50,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
   const [preview, setPreview] = useState<string | null>(brand?.logoUrl ?? null);
   const [contact, setContact] = useState<Contact>(brand?.contact ?? {});
   const [endCard, setEndCard] = useState(brand?.endCard ?? true);
+  const [colors, setColors] = useState<string[]>(brand?.colors?.length ? brand.colors.slice(0, 3) : ['#d4a017', '#7a1f2b', '#ffffff']);
   const [saved, setSaved] = useState<Brand | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +94,6 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
     if (upTo >= 0 && !industry.trim()) return [0, 'Tell us what your business does. Every post is designed around it.'];
     if (upTo >= 1 && !featured.length && !draft.trim()) return [1, 'Add at least one product or service to feature.'];
     if (upTo >= 2 && !name.trim()) return [2, 'Tell us your business name.'];
-    if (upTo >= 2 && !logo && !brand) return [2, 'Upload your logo.'];
     return null;
   }
 
@@ -126,6 +126,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
         featured: items,
         contact: details,
         endCard: withContact && endCard,
+        colors: preview ? [] : colors,
         logo,
       });
       setSaved(b);
@@ -220,7 +221,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
         {saved ? (
           <div className="mt-6">
             <div className="flex items-center gap-4 rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/[0.06]">
-              <img src={saved.logoUrl} alt="Logo" className="h-14 w-20 rounded-lg bg-white/90 object-contain p-1.5" />
+              {saved.logoUrl && <img src={saved.logoUrl} alt="Logo" className="h-14 w-20 rounded-lg bg-white/90 object-contain p-1.5" />}
               <div className="min-w-0">
                 <div className="truncate text-[15px] font-medium">{saved.name || 'Your business'}</div>
                 <div className="truncate text-[12.5px] text-[color:var(--text-2)]">{saved.style}</div>
@@ -228,7 +229,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
             </div>
             {saved.colors.length > 0 && (
               <div className="mt-4">
-                <div className="mb-2 text-[12px] text-[color:var(--text-3)]">Colours we found in your logo</div>
+                <div className="mb-2 text-[12px] text-[color:var(--text-3)]">{saved.logoUrl ? 'Colours we found in your logo' : 'Your brand colours'}</div>
                 <div className="flex flex-wrap gap-2">
                   {saved.colors.map((c) => (
                     <span key={c} className="chip mono-num">
@@ -395,7 +396,9 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
                   <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus placeholder="Acme Prints" className={input} />
                 </label>
                 <div>
-                  <span className="mb-1.5 block text-[13px] font-medium">Your logo</span>
+                  <span className="mb-1.5 block text-[13px] font-medium">
+                    Your logo <span className="font-normal text-[color:var(--text-3)]">(optional)</span>
+                  </span>
                   <input
                     ref={fileRef}
                     type="file"
@@ -430,6 +433,26 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
                     </span>
                   </button>
                 </div>
+                {preview ? (
+                  <p className="text-[12.5px] text-[color:var(--text-3)]">We read your brand colours from your logo.</p>
+                ) : (
+                  <div>
+                    <span className="mb-1.5 block text-[13px] font-medium">No logo? Pick your brand colours</span>
+                    <div className="flex gap-3">
+                      {colors.map((c, i) => (
+                        <label key={i} className="press relative h-12 w-12 cursor-pointer overflow-hidden rounded-full ring-2 ring-white/15" style={{ background: c }}>
+                          <span className="sr-only">Brand colour {i + 1}</span>
+                          <input
+                            type="color"
+                            value={c}
+                            onChange={(e) => setColors(colors.map((x, j) => (j === i ? e.target.value : x)))}
+                            className="absolute inset-0 cursor-pointer opacity-0"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 

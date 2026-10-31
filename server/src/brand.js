@@ -71,8 +71,21 @@ function cleanContact(contact) {
 
 export const hasContact = (brand) => Boolean(brand?.endCard && brand.contact && Object.keys(brand.contact).length);
 
-// `logo` is { path, mimetype } of an uploaded file, or null to keep the current one.
-export async function saveBrand({ id, name, industry, logo, website, featured, contact, endCard }) {
+// Brand colours picked by hand (clients without a logo): hex codes like "#d4a017".
+function cleanColors(list) {
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      list = [];
+    }
+  }
+  return (Array.isArray(list) ? list : []).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 5);
+}
+
+// `logo` is { path, mimetype } of an uploaded file, or null to keep the current one (or for no logo).
+// Colours come from the logo; without one, from `colors` picked by hand.
+export async function saveBrand({ id, name, industry, logo, website, featured, contact, endCard, colors }) {
   industry = (industry || '').trim();
   name = (name || '').trim();
   if (!name) throw new BrandError('Tell us your business name');
@@ -82,7 +95,8 @@ export async function saveBrand({ id, name, industry, logo, website, featured, c
   contact = cleanContact(contact);
   const existing = id ? brands.get(id) : null;
   if (id && !existing) throw new BrandError('Brand not found');
-  if (!logo && !existing) throw new BrandError('Upload your logo');
+  colors = cleanColors(colors);
+  if (!logo && !existing?.logoPath && !colors.length) throw new BrandError('Upload your logo or pick your brand colours');
   let site = null;
   try {
     site = normalizeUrl(website);
@@ -100,7 +114,8 @@ export async function saveBrand({ id, name, industry, logo, website, featured, c
     endCard: Object.keys(contact).length > 0 && endCard !== false && endCard !== 'false',
     updatedAt: new Date().toISOString(),
   });
-  if (logo || !brand.colors) Object.assign(brand, await readLogo(brand));
+  if (logo || (brand.logoPath && !brand.colors)) Object.assign(brand, await readLogo(brand));
+  else if (!brand.logoPath) Object.assign(brand, { logoUrl: null, colors, style: '' });
   // Read the website when it's new or changed. A site that can't be read doesn't block saving.
   if (!site) Object.assign(brand, { website: null, websiteProfile: null, websiteError: null });
   else if (site !== brand.website || !brand.websiteProfile) {
@@ -198,170 +213,54 @@ export async function studyWebsite(brand, site) {
   return { ...profile, readAt: new Date().toISOString(), pagesRead: site.pages.length };
 }
 
-const BRIEF_SYSTEM = `You are the executive creative director of a world-class advertising agency, famous for festival campaigns that feel made
-for one specific business: original, warm, on-brand and culturally precise. A business gives you a festival or occasion. You write
-the brief for an AI image model (the post) and an AI video model (which animates that exact image into a short reel).
+// ---- Prompts ----
 
-THE CLIENT
-The client message tells you what the business does, the products or services they want featured, their brand colours and logo
-style, and sometimes a profile read from their website. Treat it as the truth about them. Never invent products, prices, offers,
-awards, statistics or claims. The test of every post: it could only have been made for THIS business. A generic festival
-greeting that any company could post is a failure.
-
-ART DIRECTION
-The client message gives a required art style for this post. Commit to it fully; it sets the look of the image and the video.
-If earlier concepts for this occasion are listed, your idea must be clearly different from all of them: a new subject, a new
-metaphor and a new composition, never a variation of a previous one.
-
-STEP 1, featured (field "featured"):
-Choose ONE of the client's featured products or services as the hero of this post, written exactly as the client wrote it.
-Prefer one that was not featured recently (listed in the message) and that has the most natural, beautiful link to this occasion.
-If the client gave no list, choose their most recognisable real product or service from what they do or their website.
-
-STEP 2, concept (field "concept"):
-Imagine three different ideas where the featured offering meets the spirit of the occasion: through its shape, materials, the craft
-or process behind it, the people who use it, or the moment it creates for their customers. Avoid clichés and stock imagery.
-Pick the strongest, most visual and most emotionally resonant idea and describe it in 2 sentences.
-Physical products stay recognisable and true to life (real shape, proportions, materials, finish); never melt, morph or rebuild them
-into festival objects. The occasion transforms the world AROUND the product: its setting, light, decoration and story.
-Services are shown through the experience or the result, with real-looking people and places that fit the business's customers.
-
-STEP 3, greeting (field "greeting"):
-The exact words on the post: a warm greeting for the occasion plus the business name, at most 7 words in total, on one or two lines,
-for example "Happy Diwali" / "from Acme Prints". Use the occasion's correct, commonly used spelling. If the client's request includes
-their own words, an offer or a message, use their words exactly (up to 12 words). Use "none" only if the client asked for no text.
-
-STEP 4, imagePrompt (one flowing paragraph, 150 to 230 words):
-Write it the way a master art director briefs a photographer or CGI artist: vivid, specific and sensory, precise about what matters
-and leaving the model room to invent the incidental detail. Cover, in this order:
-1. Format and medium: a {ASPECT} premium social media post; photoreal CGI or high-end photography, or the medium the art style asks for.
-2. The hero: the featured offering, exactly what it looks like (form, material, finish, scale), and how the occasion surrounds it.
-3. Composition: one clear focal point and a visual hierarchy designed for {ASPECT}, using the full frame edge to edge. The greeting
-   sits in a clean area (usually the lower third) with breathing room so it reads instantly on a phone. Keep the top-right corner
-   calm and uncluttered: the client places their real logo there afterwards.
-4. The occasion: the symbols, objects, colours and light that genuinely belong to THIS occasion and region (for example diyas,
-   rangoli and marigolds for Diwali; a trident, lion and red-and-white for Durga Puja), respectful and accurate, never mixing festivals.
-5. Colour: the brand colours (give the hex codes) lead the palette; the occasion's traditional colours support them in harmony.
-6. Light and mood: key light, rim light, glow, depth of field, atmosphere (bokeh, sparks, dust, haze) and the emotion it should create.
-7. Typography: the greeting in double quotes, exactly as in "greeting", with font style, weight, colour, effect and placement.
-8. Finish: crisp, high detail, commercial advertising quality.
-End with these rules, written out: "Render the quoted text exactly once, spelled exactly as written, with perfect letters; no other
-text, words, numbers or letters anywhere. No logos, brand marks, watermarks or signatures."
-
-STEP 5, videoPrompt (120 to 180 words): you are now a senior video editor cutting a premium brand reel that starts from THIS image.
-Write it as a timed shot list with the cuts, for the requested length:
-- Shot 1, the hook (first ~1.5 s): an arresting opening on a detail of the scene (a macro close-up of the featured product or
-  service, a reveal from darkness, or a fast push-in), so viewers stop scrolling.
-- Shots 2 and 3, the build: two different angles or close-ups of the featured offering and the festival details from the same
-  scene, joined with professional transitions (a match cut, whip pan, speed ramp, light-leak or focus-pull), each with its own
-  motion (rotation, sparks, petals, flowing light, people's hands at work).
-- Final shot, the payoff (last ~2 s): settle on the full composition exactly as in the image, with the greeting crisp and still,
-  held calmly to the end.
-- Edit rhythm: cuts land on the music's beats; keep the colour grade and lighting continuous across shots.
-- Sound design: music for the occasion and region (for example temple bells and sitar for Diwali, dhak drums for Durga Puja,
-  dhol for Navratri) with a rising build, a hit on the reveal, subtle whooshes on transitions{ENDING}.
-- Rules, written out: "All shots belong to the same scene, colours and lighting. The featured product keeps its real shape and
-  details in every shot. The greeting appears only in the final shot, exactly as written in the image, sharp and legible; it never
-  moves, changes, repeats or duplicates. No other text, no logos, no watermarks. No morphing or distortion of the subject."
-
-title: 2 to 5 words naming the post.
-
-Everything you write must be in flawless English: correct spelling and grammar, no repeated sentences or phrases.`;
-
-const END_CARD_NOTE =
-  ', and the music resolves on the final beat with a soft ring-out (the app adds its own closing card with the logo and contact ' +
-  'details after this shot, so never show contact details, phone numbers or web addresses yourself)';
-
-function clientContext(brand, recentFeatured = []) {
-  const w = brand.websiteProfile;
-  const featured = brand.featured?.length ? brand.featured : null;
+// The image prompt, written straight from the client's details: warm and open, so the image model has room to design.
+export function imagePrompt(brand, festival) {
+  const products = brand.featured?.length ? brand.featured.join(', ') : null;
+  const site = brand.websiteProfile;
   return (
-    `Business name: ${brand.name}\nWhat they do: ${brand.industry}\n` +
-    (featured
-      ? `Products and services they want featured: ${featured.join('; ')}\n` +
-        (recentFeatured.length ? `Featured in their most recent posts (prefer a different one): ${recentFeatured.join('; ')}\n` : '')
+    `Imagine you are the owner of ${brand.name}, a business that does this: ${brand.industry}. ` +
+    `You are also a gifted designer who makes festival posts for businesses in your industry.\n\n` +
+    `Create a beautiful, aesthetic ${festival} post for ${brand.name}: a vertical 9:16 post for Instagram and WhatsApp.\n` +
+    (products
+      ? `Feature our products and services: ${products}. Use all of them, a few, or just one, whatever makes the most beautiful post. ` +
+        `Show them as they really look.\n`
       : '') +
-    `Brand colours (from the logo): ${brand.colors?.join(', ') || 'not known'}\nLogo style: ${brand.style || 'not known'}\n` +
-    (w
-      ? `From their website (${brand.website}):\n` +
-        `- About them: ${w.summary}\n- Products and services: ${w.products.join('; ') || 'not listed'}\n` +
-        `- Customers: ${w.audience}\n- Tone of voice: ${w.tone}\n- Visual style: ${w.visualStyle}\n` +
-        `- Website colours: ${w.colors.join(', ') || 'not found'}\n- Website fonts: ${w.fonts.join(', ') || 'not found'}\n`
-      : '')
+    (brand.colors?.length ? `Use our brand colours ${brand.colors.join(', ')}, together with the festival's own colours.\n` : '') +
+    (site ? `About us, from our website: ${site.summary} Our visual style: ${site.visualStyle}\n` : '') +
+    `\nMake it feel happy, warm and neat, like a real designer made it, not AI. Fill it with the festivity of ${festival}: ` +
+    `its traditional decorations, lights, colours and celebration` +
+    (/diwali/i.test(festival) ? ' (diyas, rangoli, sparkles and fireworks)' : '') + '. ' +
+    `Use all of them or a few, whatever suits the design.\n` +
+    `Add the short ${festival} greeting people really use (like "Happy Diwali" or "Merry Christmas") with "${brand.name}", spelled exactly right. ` +
+    `No other text, no logos and no watermarks.` +
+    (brand.logoPath ? ' Keep the top-right corner clear: we add our real logo there.' : '')
   );
 }
 
-// Art styles rotated between posts so every generation looks different.
-export const STYLES = [
-  'cinematic product photography: dramatic studio lighting, rich reflections, shallow depth of field',
-  'luxury minimal: deep matte background, gold-foil accents, generous negative space, editorial layout',
-  'layered paper-cut art: handcrafted paper layers, soft cast shadows, tactile depth',
-  '3D isometric miniature world: a tiny detailed diorama, tilt-shift feel, playful but premium',
-  'bold flat illustration: confident shapes, vibrant colour blocking, clean vector look',
-  'Indian folk-art fusion: Madhubani or Kalamkari inspired patterns framing a modern composition',
-  'neon night: glowing light trails, dark atmosphere, cinematic haze',
-  'warm documentary photography: real people, the workplace and craftsmanship, golden-hour light',
-  'watercolour and ink: flowing washes, delicate line work, airy and elegant',
-  'bold typographic poster: strong grid, oversized type as the hero, graphic shapes',
-  'soft glassmorphism: frosted glass panels, gradients, modern tech aesthetic',
-  'macro detail: extreme close-up of materials and textures, jewel-like highlights',
-];
-
-export function pickStyle(recent = []) {
-  const fresh = STYLES.filter((s) => !recent.includes(s));
-  const pool = fresh.length ? fresh : STYLES;
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-// `variety` = { style, avoid: [earlier concepts for this occasion], recentFeatured: [offerings in recent posts] } for new posts.
-// `revision` = { previousPrompt, change, featured } when the client asks to change an earlier post.
-export async function writeBrief(brand, request, aspectRatio, revision, variety, seconds = 8) {
-  if (!live()) {
-    const featured = revision?.featured || brand.featured?.[0] || null;
-    return {
-      featured,
-      title: request.slice(0, 40),
-      imagePrompt: `${request} for ${brand.name || 'a business'} that ${brand.industry}${featured ? `, featuring ${featured}` : ''}. Premium social media post, ${aspectRatio}.`,
-      videoPrompt: 'Gentle cinematic motion, drifting light particles, slow push-in.',
-    };
-  }
-  const today = new Date().toISOString().slice(0, 10);
-  const system = BRIEF_SYSTEM
-    .replaceAll('{ASPECT}', aspectRatio === '9:16' ? 'vertical 9:16' : 'landscape 16:9')
-    .replace('{ENDING}', hasContact(brand) ? END_CARD_NOTE : '');
-  return askGemini({
-    system,
+// After the image is made, the AI looks at it and says how it would turn it into a video. That answer is the video prompt.
+export async function writeVideoPrompt(brand, festival, imagePath, seconds = 8) {
+  if (!live()) return 'Gentle cinematic motion, drifting light particles, slow push-in.';
+  const mimeType = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }[path.extname(imagePath)] || 'image/png';
+  const { videoPrompt } = await askGemini({
+    system:
+      'You are a video director who turns festival posts into short social media videos. ' +
+      'Write the prompt for an AI video model that animates the attached image.',
     parts: [
       {
         text:
-          clientContext(brand, variety?.recentFeatured) +
-          `Today: ${today}\nClient request: ${request}\nVideo length: ${seconds} seconds (time the shot list to fill exactly this)` +
-          (variety?.style ? `\nRequired art style for this post: ${variety.style}` : '') +
-          (variety?.avoid?.length ? `\nEarlier concepts for this occasion (do NOT repeat or resemble these):\n- ${variety.avoid.join('\n- ')}` : '') +
-          (revision
-            ? `\n\nThis is a REVISION of an earlier post. The earlier image prompt was:\n${revision.previousPrompt}\n` +
-              (revision.featured ? `It featured: ${revision.featured}. Keep featuring it unless the change asks otherwise.\n` : '') +
-              `The client wants this change: ${revision.change}\n` +
-              'Rewrite both prompts so they keep everything the client did not ask to change and apply the change clearly. ' +
-              'The earlier image is attached to the image model as a reference.'
-            : ''),
+          `This is a ${festival} post for ${brand.name} (${brand.industry}). How would you turn it into a beautiful ${seconds} second video? ` +
+          'Describe the camera moves, what moves, glows and sparkles, how the scene comes alive, and the music and sounds that suit the festival. ' +
+          'Keep the products, the text and the layout exactly as in the image; the greeting stays sharp and never changes. No new text, no logos. ' +
+          (hasContact(brand) ? 'Let the music end softly on the last second. ' : '') +
+          'Write only the video prompt, one paragraph, under 120 words.',
       },
+      { inlineData: { mimeType, data: fs.readFileSync(imagePath).toString('base64') } },
     ],
-    schema: {
-      type: 'OBJECT',
-      // Order matters: the offering, concept and greeting are decided before the prompts are written.
-      properties: {
-        featured: { type: 'STRING' },
-        concept: { type: 'STRING' },
-        greeting: { type: 'STRING' },
-        imagePrompt: { type: 'STRING' },
-        videoPrompt: { type: 'STRING' },
-        title: { type: 'STRING' },
-      },
-      required: ['featured', 'concept', 'greeting', 'imagePrompt', 'videoPrompt', 'title'],
-      propertyOrdering: ['featured', 'concept', 'greeting', 'imagePrompt', 'videoPrompt', 'title'],
-    },
+    schema: { type: 'OBJECT', properties: { videoPrompt: { type: 'STRING' } }, required: ['videoPrompt'] },
   });
+  return videoPrompt;
 }
 
 // ---- Logo overlay ----
@@ -427,29 +326,35 @@ export async function addEndCard(input, output, brand) {
   const fontRegular = font('regular');
   if (!fontBold || !fontRegular) throw new Error('No font available for the end card');
   const v = await probe(input);
-  const logo = await probe(brand.logoPath);
   const { w: W, h: H, fps } = v;
   const S = Math.min(W, H);
   const portrait = H > W;
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'endcard-'));
   try {
-    // Logo on a rounded white plate, so dark and transparent logos both read.
-    const maxW = portrait ? W * 0.5 : W * 0.26;
-    const maxH = S * 0.2;
-    const k = Math.min(maxW / logo.w, maxH / logo.h);
-    const lw = even(logo.w * k);
-    const lh = even(logo.h * k);
-    const pad = even(S * 0.04);
-    const pw = lw + 2 * pad;
-    const ph = lh + 2 * pad;
-    const r = Math.round(Math.min(ph, pw) * 0.18);
-    const round = `if(gt(abs(X-W/2),W/2-${r})*gt(abs(Y-H/2),H/2-${r}),if(lte(hypot(abs(X-W/2)-(W/2-${r}),abs(Y-H/2)-(H/2-${r})),${r}),255,0),255)`;
+    // Logo on a rounded white plate, so dark and transparent logos both read. Without a logo the plate is a
+    // transparent pixel, so the rest of the card stays the same.
     const plate = path.join(tmp, 'plate.png');
-    await run('ffmpeg', [
-      '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=c=white:s=${pw}x${ph}`, '-i', brand.logoPath, '-filter_complex',
-      `[1:v]scale=${lw}:${lh}[l];[0:v][l]overlay=${pad}:${pad},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${round}'`,
-      '-frames:v', '1', plate,
-    ]);
+    let ph = 0;
+    if (brand.logoPath) {
+      const logo = await probe(brand.logoPath);
+      const maxW = portrait ? W * 0.5 : W * 0.26;
+      const maxH = S * 0.2;
+      const k = Math.min(maxW / logo.w, maxH / logo.h);
+      const lw = even(logo.w * k);
+      const lh = even(logo.h * k);
+      const pad = even(S * 0.04);
+      const pw = lw + 2 * pad;
+      ph = lh + 2 * pad;
+      const r = Math.round(Math.min(ph, pw) * 0.18);
+      const round = `if(gt(abs(X-W/2),W/2-${r})*gt(abs(Y-H/2),H/2-${r}),if(lte(hypot(abs(X-W/2)-(W/2-${r}),abs(Y-H/2)-(H/2-${r})),${r}),255,0),255)`;
+      await run('ffmpeg', [
+        '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=c=white:s=${pw}x${ph}`, '-i', brand.logoPath, '-filter_complex',
+        `[1:v]scale=${lw}:${lh}[l];[0:v][l]overlay=${pad}:${pad},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${round}'`,
+        '-frames:v', '1', plate,
+      ]);
+    } else {
+      await run('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=black@0:s=2x2,format=rgba', '-frames:v', '1', plate]);
+    }
     const last = path.join(tmp, 'last.png');
     await run('ffmpeg', ['-y', '-v', 'error', '-sseof', '-0.25', '-i', input, '-frames:v', '1', '-update', '1', last]);
 
@@ -462,10 +367,10 @@ export async function addEndCard(input, output, brand) {
     const gap = S * 0.05;
     const capSize = Math.round(S * 0.024);
     const lineStep = lineSize * 1.6;
-    const block = ph + gap + nameSize + gap * 0.7 + 3 + gap * 0.7 + capSize + gap * 0.55 + lines.length * lineStep;
+    const block = (ph && ph + gap) + nameSize + gap * 0.7 + 3 + gap * 0.7 + capSize + gap * 0.55 + lines.length * lineStep;
     let y = Math.max(S * 0.04, (H - block) / 2);
     const plateY = Math.round(y);
-    y += ph + gap;
+    y += ph && ph + gap;
 
     const files = {};
     const text = (key, value) => fs.writeFileSync((files[key] = path.join(tmp, `${key}.txt`)), value);

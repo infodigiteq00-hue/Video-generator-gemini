@@ -11,7 +11,7 @@ import {
 } from './jobs.js';
 import { mountMcp } from './mcp.js';
 import { authEnabled, mountAuth, requireAuth } from './auth.js';
-import { BrandError, brandToPublic, currentBrand, getBrand, pickStyle, saveBrand, writeBrief } from './brand.js';
+import { BrandError, brandToPublic, currentBrand, getBrand, imagePrompt, saveBrand, writeVideoPrompt } from './brand.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB_DIST = path.resolve(ROOT, '..', 'web', 'dist');
@@ -77,8 +77,8 @@ app.post('/api/jobs', upload.single('image'), (req, res) => {
 
 async function brandRoute(req, res, id) {
   try {
-    const { name, industry, website, featured, contact, endCard } = req.body;
-    const brand = await saveBrand({ id, name, industry, website, featured, contact, endCard, logo: req.file ?? null });
+    const { name, industry, website, featured, contact, endCard, colors } = req.body;
+    const brand = await saveBrand({ id, name, industry, website, featured, contact, endCard, colors, logo: req.file ?? null });
     res.status(id ? 200 : 201).json(brandToPublic(brand));
   } catch (err) {
     if (req.file) fs.rmSync(req.file.path, { force: true });
@@ -98,87 +98,31 @@ app.get('/api/brands/:id', (req, res) => {
   res.json(brandToPublic(brand));
 });
 
-// A short request ("Diwali") → written brief → brand image, and for videos the image is then animated.
-// With `changeOf` + `change`, revises an earlier post using it as the starting point.
+// A festival ("Diwali") → image from the client's details; once it's ready the server asks the AI how to animate it
+// and makes the video (jobs.js). With `changeOf`, makes the video for a finished image whose video didn't start.
 app.post('/api/brand-posts', express.json(), async (req, res) => {
-  const { brandId, chatId, request, kind, changeOf, change, aspectRatio = '16:9', imageSize, resolution, durationSeconds, provider } =
-    req.body ?? {};
+  const { brandId, chatId, request, changeOf, aspectRatio = '9:16', imageSize, resolution, durationSeconds, provider } = req.body ?? {};
   const brand = getBrand(brandId);
   if (!brand) return res.status(404).json({ error: 'Set up your brand first' });
-
-  let base = null;
-  if (changeOf) {
-    base = getJob(changeOf);
-    if (base?.auto && base.sourceJobId) base = getJob(base.sourceJobId); // changing a video = changing its image
-    if (!base || base.kind !== 'image' || base.status !== 'succeeded') return res.status(400).json({ error: 'That post is no longer available' });
-    if (!change?.trim()) return res.status(400).json({ error: 'Tell us what to change' });
-  } else if (!request?.trim()) {
-    return res.status(400).json({ error: 'Tell us the festival or occasion' });
-  }
-  // A change keeps the original's type: a video post gets a new video, an image post stays an image.
-  const makeVideo = base ? Boolean(base.next) || kind === 'video' : (kind ?? 'video') === 'video';
-  const ratio = base?.aspectRatio ?? aspectRatio;
-
-  // "Make it a video": animate the finished image as it is, no redesign.
-  if (base && req.body.animate) {
-    try {
-      // Written against the finished image's prompt, so the video shows what is actually in the image.
-      const keep = { previousPrompt: base.prompt, change: 'No change to the image: keep it exactly as it is and write the video for it', featured: base.featured };
-      const brief = await writeBrief(brand, base.request ?? base.prompt, ratio, keep, null, durationSeconds);
+  try {
+    if (changeOf) {
+      const base = getJob(changeOf);
+      if (!base || base.kind !== 'image' || base.status !== 'succeeded') return res.status(400).json({ error: 'That post is no longer available' });
+      const prompt = await writeVideoPrompt(brand, base.request, base.cleanPath, durationSeconds);
       const job = createJob({
-        kind: 'video', chatId, prompt: brief.videoPrompt, request: change.trim(), title: base.title,
-        aspectRatio: ratio, resolution, durationSeconds, provider, brandId, sourceJobId: base.id,
+        kind: 'video', chatId, prompt, request: base.request, title: base.title, aspectRatio: base.aspectRatio,
+        resolution, durationSeconds, provider, brandId, sourceJobId: base.id, auto: true,
       });
       return res.status(201).json(toPublic(job));
-    } catch (err) {
-      return res.status(err instanceof ValidationError ? 400 : 502).json({ error: err.message });
     }
-  }
-
-  // Every new post gets a fresh art style and must avoid the concepts already made for this occasion,
-  // and leans towards a product or service that wasn't featured lately.
-  const mine = listJobs().filter((j) => j.brandId === brandId && j.kind === 'image');
-  const occasion = (base?.request ?? request ?? '').trim().toLowerCase();
-  const sameOccasion = mine.filter((j) => !j.sourceJobId && j.request && j.request.toLowerCase() === occasion);
-  // "A different design" on an existing post also gets a new style and must leave the old concept behind.
-  const redesign = base && /different (concept|design)/i.test(change);
-  const variety = base && !redesign
-    ? null
-    : {
-        style: pickStyle([base?.style, ...mine.slice(0, 4).map((j) => j.style)].filter(Boolean)),
-        avoid: [base?.concept, ...sameOccasion.map((j) => j.concept)].filter(Boolean).slice(0, 8),
-        recentFeatured: [...new Set(mine.map((j) => j.featured).filter(Boolean))].slice(0, 3),
-      };
-
-  let brief;
-  try {
-    brief = base
-      ? await writeBrief(brand, base.request ?? base.prompt, ratio, { previousPrompt: base.prompt, change: change.trim(), featured: base.featured }, variety, durationSeconds)
-      : await writeBrief(brand, request.trim(), ratio, null, variety, durationSeconds);
-  } catch (err) {
-    return res.status(502).json({ error: `Couldn't write the brief: ${err.message}` });
-  }
-  try {
+    if (!request?.trim()) return res.status(400).json({ error: 'Pick a festival' });
     const job = createJob({
-      kind: 'image',
-      chatId,
-      prompt: brief.imagePrompt,
-      request: base ? change.trim() : request.trim(),
-      title: base ? base.title : brief.title,
-      aspectRatio: ratio,
-      imageSize: base?.imageSize ?? imageSize,
-      provider,
-      brandId,
-      sourceJobId: base?.id,
-      concept: brief.concept,
-      featured: brief.featured,
-      style: variety ? variety.style : base.style,
-      next: makeVideo ? { videoPrompt: brief.videoPrompt, resolution, durationSeconds, provider } : null,
+      kind: 'image', chatId, prompt: imagePrompt(brand, request.trim()), request: request.trim(), title: request.trim(),
+      aspectRatio, imageSize, provider, brandId, next: { resolution, durationSeconds, provider },
     });
     res.status(201).json(toPublic(job));
   } catch (err) {
-    if (!(err instanceof ValidationError)) throw err;
-    res.status(400).json({ error: err.message });
+    res.status(err instanceof ValidationError ? 400 : 502).json({ error: err.message });
   }
 });
 

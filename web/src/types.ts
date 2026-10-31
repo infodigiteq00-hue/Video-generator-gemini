@@ -37,8 +37,6 @@ export interface Job {
   cleanUrl?: string | null;
   /** Where the client placed their logo; null = no logo */
   logo?: LogoPlace | null;
-  /** The product or service a brand post was built around */
-  featured?: string | null;
   /** Brand post that turns into a video once the image is ready */
   makesVideo?: boolean;
   /** Job whose output image was used as input */
@@ -96,7 +94,8 @@ export interface Brand {
   id: string;
   name: string;
   industry: string;
-  logoUrl: string;
+  /** null when the client has no logo and picked colours by hand */
+  logoUrl: string | null;
   colors: string[];
   style: string;
   website?: string | null;
@@ -132,6 +131,8 @@ export interface BrandInput {
   featured: string[];
   contact: Contact;
   endCard: boolean;
+  /** Picked by hand when there's no logo; otherwise read from the logo */
+  colors: string[];
   logo: File | null;
 }
 
@@ -139,12 +140,8 @@ export interface BrandPostInput {
   brandId: string;
   chatId: string;
   request: string;
-  kind?: Kind;
-  /** Revise this earlier post instead of starting fresh */
+  /** Make the video for this finished image (when its video didn't start) */
   changeOf?: string;
-  change?: string;
-  /** With changeOf: animate that image as it is */
-  animate?: boolean;
   aspectRatio: AspectRatio;
   imageSize: ImageSize;
   resolution: Resolution;

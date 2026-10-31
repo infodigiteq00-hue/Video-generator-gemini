@@ -6,7 +6,7 @@ import path from 'node:path';
 import { omni } from './providers/omni.js';
 import { mock } from './providers/mock.js';
 import { mockImage, nanoBanana } from './providers/image.js';
-import { addEndCard, getBrand, hasContact, stampLogo } from './brand.js';
+import { addEndCard, getBrand, hasContact, stampLogo, writeVideoPrompt } from './brand.js';
 import { DATA_DIR, OUTPUTS_DIR, UPLOADS_DIR } from './paths.js';
 
 export { DATA_DIR, UPLOADS_DIR };
@@ -85,7 +85,7 @@ function copyImage(source) {
 // Throws ValidationError for bad input; the caller owns cleaning up `image` then.
 export function createJob({
   kind, chatId, prompt, negativePrompt, aspectRatio, resolution, durationSeconds, imageSize, provider: providerId, image, sourceJobId,
-  request, title, brandId, next, auto, concept, style, featured,
+  request, title, brandId, next, auto,
 }) {
   kind ||= 'video';
   prompt = (prompt || '').trim();
@@ -128,9 +128,6 @@ export function createJob({
     prompt,
     request: request || null, // the short text the user typed, when `prompt` was written for them
     title: title || null,
-    concept: concept || null, // the idea behind a brand post, so later posts can avoid repeating it
-    style: style || null,
-    featured: featured || null, // the product or service this brand post was built around
     brandId: brandId || null,
     next: next || null, // brand posts: the video to make once the image is ready
     auto: Boolean(auto), // created by the app (follow-up video), not typed by the user
@@ -162,6 +159,7 @@ export function createJob({
 export async function placeLogo(job, place) {
   const brand = job.brandId && getBrand(job.brandId);
   if (!brand) throw new ValidationError('Set up your brand first');
+  if (place && !brand.logoPath) throw new ValidationError('Upload your logo first');
   if (job.status !== 'succeeded' || !job.cleanPath) throw new ValidationError('This post is not ready yet');
   const ok = (v, lo, hi) => typeof v === 'number' && v >= lo && v <= hi;
   if (place && !(ok(place.x, -0.5, 1) && ok(place.y, -0.5, 1) && ok(place.w, 0.02, 1))) throw new ValidationError('Invalid logo position');
@@ -238,21 +236,23 @@ async function runImageJob(job) {
   fs.writeFileSync(outputPath, buffer);
   const done = { status: 'succeeded', outputPath, cleanPath: outputPath, outputUrl: `/media/videos/${file}` };
 
-  // Brand posts continue straight into the video. Start it before marking the image done,
-  // so anyone polling sees the video job appear in the same refresh.
+  // Brand posts continue straight into the video: the AI looks at the image and writes how to animate it.
+  // Start it before marking the image done, so anyone polling sees the video job appear in the same refresh.
   let followUpError = null;
   if (job.next) {
     try {
+      const brand = getBrand(job.brandId);
       createJob({
         kind: 'video',
         chatId: job.chatId,
-        prompt: job.next.videoPrompt,
+        prompt: brand ? await writeVideoPrompt(brand, job.request, outputPath, job.next.durationSeconds) : job.prompt,
         aspectRatio: job.aspectRatio,
         resolution: job.next.resolution,
         durationSeconds: job.next.durationSeconds,
         provider: job.next.provider,
         image: copyImage({ ...job, ...done }),
         sourceJobId: job.id,
+        request: job.request,
         title: job.title,
         brandId: job.brandId,
         auto: true,

@@ -84,7 +84,7 @@ export default function App() {
   const image = mine.filter((j) => j.kind === 'image').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
   const video = (image && mine.filter((j) => j.kind === 'video' && j.sourceJobId === image.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]) || null;
 
-  async function generate(input: { request?: string; changeOf?: string; change?: string; animate?: boolean }) {
+  async function generate(input: { request?: string; changeOf?: string }) {
     if (!brand) return;
     setBusy({ request: input.request ?? image?.request ?? 'festival', since: new Date().toISOString() });
     setOffline(null);
@@ -93,10 +93,7 @@ export default function App() {
         brandId: brand.id,
         chatId: chatId === LEGACY ? newId() : chatId,
         request: input.request ?? '',
-        kind: 'video',
         changeOf: input.changeOf,
-        change: input.change,
-        animate: input.animate,
         ...FORMAT,
         provider,
       });
@@ -191,7 +188,7 @@ export default function App() {
               logoUrl={brand.logoUrl}
               onPlaceLogo={placeLogo}
               onRetry={() => void generate({ request: image.request ?? image.prompt })}
-              onMakeVideo={() => void generate({ changeOf: image.id, change: 'Make it a video', animate: true })}
+              onMakeVideo={() => void generate({ changeOf: image.id })}
               onDelete={async () => {
                 if (!confirm('Delete this post and its video? This can’t be undone.')) return;
                 for (const j of mine) await remove(j.id).catch(() => {});
@@ -206,7 +203,11 @@ export default function App() {
               <FilmWall jobs={jobs} />
             </div>
             <div className="appear w-full max-w-2xl text-center">
-              <img src={brand.logoUrl} alt={`${brand.name} logo`} className="mx-auto mb-6 h-14 max-w-[180px] rounded-xl bg-white/90 object-contain p-2" />
+              {brand.logoUrl ? (
+                <img src={brand.logoUrl} alt={`${brand.name} logo`} className="mx-auto mb-6 h-14 max-w-[180px] rounded-xl bg-white/90 object-contain p-2" />
+              ) : (
+                <p className="mb-6 text-[18px] font-semibold tracking-[-0.01em]">{brand.name}</p>
+              )}
               <p className="text-[15px] text-[color:var(--text-2)]">What are we celebrating?</p>
               <label className="relative mx-auto mt-2 inline-flex max-w-full cursor-pointer items-center gap-2">
                 <span className="sr-only">Festival</span>

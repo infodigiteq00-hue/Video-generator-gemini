@@ -45,15 +45,15 @@ Known limitation: OpenAI developers report that images ChatGPT *generates* aren'
 ## How it works (the product)
 
 1. **Welcome screen (once), four steps:**
-   1. **What the business does** (with quick-pick chips) and optionally the website. The server reads the website (homepage + About/Products/Services pages, CSS colours and fonts, a few photos; public addresses only, honest `DigiteqStudioBot` user agent) and Gemini turns it into a company profile (products, audience, tone, visual style) used in every brief (`server/src/website.js`).
-   2. **Products or services to feature** (up to 10). Each post is built around one of them; the brief writer picks the best fit for the occasion and rotates away from the ones used in recent posts.
-   3. **Business name and logo.** Gemini reads the logo's colours and style (`server/src/brand.js`).
+   1. **What the business does** (with quick-pick chips) and optionally the website. The server reads the website (homepage + About/Products/Services pages, CSS colours and fonts, a few photos; public addresses only, honest `DigiteqStudioBot` user agent) and Gemini turns it into a company profile (products, audience, tone, visual style) added to every image prompt (`server/src/website.js`).
+   2. **Products or services to feature** (up to 10). The image AI uses all, a few or one of them, whichever makes the best post.
+   3. **Business name and logo.** Gemini reads the logo's colours and style (`server/src/brand.js`). The logo is optional: without one, the client picks brand colours by hand.
    4. **Contact details** (optional: phone, email, website, address). Downloaded videos end with a 3-second closing card (logo, name, contact details) drawn by ffmpeg, so numbers are always exact (`addEndCard` in `server/src/brand.js`).
    The brand is remembered in this browser and can be edited from the sidebar.
 2. **Home screen:** the nearest big festival is suggested from the calendar (`web/src/festivals.ts`; Indian festivals for devices on India time, worldwide ones for everyone). The user can pick another from the dropdown and presses **Generate**. Every post is a 9:16 image plus an 8 second video. Lunar festival dates are listed per year: add the next year's dates before the list runs out.
 3. **Wait screen:** shows the steps (idea, post, video) and a timer while it works. No chat.
-4. Gemini writes the full creative brief from the business details, featured products and festival. Nano Banana 2 makes the image, leaving the top-right corner clear; Gemini Omni then animates the logo-free image.
-   **Variety:** every new post gets a different art style (12 rotating directions in `STYLES`, `server/src/brand.js`) and the AI is told which concepts it already made for that occasion so it never repeats one. **Video** prompts are written as an editor's timed shot list (hook, two build shots with transitions, final hero shot with the greeting, music cut to the beats), timed to the chosen length.
+4. **Image:** one warm, open prompt is built straight from the client's details: "imagine you own this business… make a beautiful Diwali post with all, a few or one of our products, in our colours, full of festivity" (`imagePrompt` in `server/src/brand.js`). Nano Banana 2 makes the image, leaving the top-right corner clear for the logo.
+   **Video:** once the image is ready, Gemini looks at it and writes how it would animate it (`writeVideoPrompt`); that answer plus the image go to Gemini Omni Flash.
 5. **Result:** the image appears first, then the video. The client places their logo on each (ffmpeg stamps the real logo) and downloads. Videos download with the contact card appended (`GET /api/jobs/:id/download`).
 
 Cost: about $0.10 per image post (2K) and $0.50 per video post (image + 8 s video).
@@ -69,7 +69,7 @@ Gemini Omni Flash bills about **$0.10 per second** of video (720p): 4 s ≈ $0.4
 ```
 server/   Express API. Keeps the API key server-side, runs jobs, stores videos in server/data/
   src/jobs.js             Job validation, storage and worker (shared by web + ChatGPT)
-  src/brand.js            Brand kits: logo reading, brief writing, logo stamping
+  src/brand.js            Brand kits: logo reading, image and video prompts, logo stamping, contact card
   src/providers/omni.js   Gemini Omni Flash video (Interactions API, synchronous)
   src/providers/image.js  Nano Banana 2 images + demo-mode images
   src/providers/mock.js   Demo mode videos (ffmpeg)
