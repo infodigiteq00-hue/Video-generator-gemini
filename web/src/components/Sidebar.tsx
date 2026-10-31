@@ -3,7 +3,7 @@ import { api } from '../api';
 import { useState } from 'react';
 import { useInstall } from '../hooks/useInstall';
 import { APP_NAME } from '../config';
-import type { AppConfig, Brand, PageId, Provider } from '../types';
+import type { Brand, PageId } from '../types';
 import { Logo } from './Logo';
 
 export interface ChatSummary {
@@ -21,18 +21,14 @@ interface Props {
   onNewChat: () => void;
   onOpenChat: (id: string) => void;
   onPage: (p: PageId) => void;
-  config: AppConfig | null;
-  provider: Provider;
-  onProvider: (p: Provider) => void;
   brand: Brand | null;
   onEditBrand: () => void;
 }
 
 
-export function Sidebar({ open, onClose, chats, chatId, page, onNewChat, onOpenChat, config, provider, onProvider, brand, onEditBrand }: Props) {
+export function Sidebar({ open, onClose, chats, chatId, page, onNewChat, onOpenChat, brand, onEditBrand }: Props) {
   const app = useInstall();
   const [iosHint, setIosHint] = useState(false);
-  const live = provider !== 'mock';
   const row = 'press flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13.5px]';
 
   return (
@@ -106,34 +102,12 @@ export function Sidebar({ open, onClose, chats, chatId, page, onNewChat, onOpenC
               )}
             </div>
           )}
-          <label className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-[12.5px] text-[color:var(--text-2)]">
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ background: live ? 'var(--green)' : 'var(--amber)', boxShadow: `0 0 8px ${live ? 'var(--green)' : 'var(--amber)'}` }}
-            />
-            <select
-              aria-label="Engine"
-              value={provider}
-              onChange={(e) => onProvider(e.target.value as Provider)}
-              className="w-full cursor-pointer appearance-none bg-transparent text-[12.5px] font-medium text-[color:var(--text)] outline-none"
-            >
-              {(config?.providers ?? []).map((p) => (
-                <option key={p.id} value={p.id} disabled={!p.available} className="bg-neutral-900">
-                  {p.id === 'mock' ? 'Demo mode (free)' : 'Live · Gemini'}
-                  {!p.available ? ' (add API key)' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
           <button
-            className="press mt-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[12.5px] text-[color:var(--text-2)] hover:bg-white/[0.05] hover:text-[color:var(--text)]"
+            className="press flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[12.5px] text-[color:var(--text-2)] hover:bg-white/[0.05] hover:text-[color:var(--text)]"
             onClick={() => void api.logout().finally(() => window.dispatchEvent(new Event('auth:expired')))}
           >
             <LogOut className="h-3.5 w-3.5" /> Sign out
           </button>
-          <p className="px-3 pb-1 text-[11px] leading-snug text-[color:var(--text-3)]">
-            {live ? 'Real images and videos.' : 'Placeholder results, no API cost.'}
-          </p>
         </div>
       </aside>
     </>

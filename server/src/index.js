@@ -7,7 +7,7 @@ import multer from 'multer';
 import { omni } from './providers/omni.js';
 import {
   ASPECT_RATIOS, DATA_DIR, DURATIONS, IMAGE_PROVIDERS, IMAGE_TYPES, PROVIDERS, RESOLUTIONS, UPLOADS_DIR, ValidationError,
-  createJob, defaultProviderId, deleteJob, getJob, listJobs, placeLogo, toPublic,
+  createJob, defaultProviderId, deleteJob, downloadFile, getJob, listJobs, placeLogo, toPublic,
 } from './jobs.js';
 import { mountMcp } from './mcp.js';
 import { authEnabled, mountAuth, requireAuth } from './auth.js';
@@ -77,7 +77,8 @@ app.post('/api/jobs', upload.single('image'), (req, res) => {
 
 async function brandRoute(req, res, id) {
   try {
-    const brand = await saveBrand({ id, name: req.body.name, industry: req.body.industry, website: req.body.website, logo: req.file ?? null });
+    const { name, industry, website, featured, contact, endCard } = req.body;
+    const brand = await saveBrand({ id, name, industry, website, featured, contact, endCard, logo: req.file ?? null });
     res.status(id ? 200 : 201).json(brandToPublic(brand));
   } catch (err) {
     if (req.file) fs.rmSync(req.file.path, { force: true });
@@ -121,7 +122,9 @@ app.post('/api/brand-posts', express.json(), async (req, res) => {
   // "Make it a video": animate the finished image as it is, no redesign.
   if (base && req.body.animate) {
     try {
-      const brief = await writeBrief(brand, base.request ?? base.prompt, ratio, null, null, durationSeconds);
+      // Written against the finished image's prompt, so the video shows what is actually in the image.
+      const keep = { previousPrompt: base.prompt, change: 'No change to the image: keep it exactly as it is and write the video for it', featured: base.featured };
+      const brief = await writeBrief(brand, base.request ?? base.prompt, ratio, keep, null, durationSeconds);
       const job = createJob({
         kind: 'video', chatId, prompt: brief.videoPrompt, request: change.trim(), title: base.title,
         aspectRatio: ratio, resolution, durationSeconds, provider, brandId, sourceJobId: base.id,
@@ -132,7 +135,8 @@ app.post('/api/brand-posts', express.json(), async (req, res) => {
     }
   }
 
-  // Every new post gets a fresh art style and must avoid the concepts already made for this occasion.
+  // Every new post gets a fresh art style and must avoid the concepts already made for this occasion,
+  // and leans towards a product or service that wasn't featured lately.
   const mine = listJobs().filter((j) => j.brandId === brandId && j.kind === 'image');
   const occasion = (base?.request ?? request ?? '').trim().toLowerCase();
   const sameOccasion = mine.filter((j) => !j.sourceJobId && j.request && j.request.toLowerCase() === occasion);
@@ -143,12 +147,13 @@ app.post('/api/brand-posts', express.json(), async (req, res) => {
     : {
         style: pickStyle([base?.style, ...mine.slice(0, 4).map((j) => j.style)].filter(Boolean)),
         avoid: [base?.concept, ...sameOccasion.map((j) => j.concept)].filter(Boolean).slice(0, 8),
+        recentFeatured: [...new Set(mine.map((j) => j.featured).filter(Boolean))].slice(0, 3),
       };
 
   let brief;
   try {
     brief = base
-      ? await writeBrief(brand, base.request ?? base.prompt, ratio, { previousPrompt: base.prompt, change: change.trim() }, variety, durationSeconds)
+      ? await writeBrief(brand, base.request ?? base.prompt, ratio, { previousPrompt: base.prompt, change: change.trim(), featured: base.featured }, variety, durationSeconds)
       : await writeBrief(brand, request.trim(), ratio, null, variety, durationSeconds);
   } catch (err) {
     return res.status(502).json({ error: `Couldn't write the brief: ${err.message}` });
@@ -166,6 +171,7 @@ app.post('/api/brand-posts', express.json(), async (req, res) => {
       brandId,
       sourceJobId: base?.id,
       concept: brief.concept,
+      featured: brief.featured,
       style: variety ? variety.style : base.style,
       next: makeVideo ? { videoPrompt: brief.videoPrompt, resolution, durationSeconds, provider } : null,
     });
@@ -183,6 +189,18 @@ app.post('/api/jobs/:id/logo', express.json(), async (req, res) => {
   try {
     const b = req.body ?? {};
     res.json(toPublic(await placeLogo(job, b.remove ? null : { x: b.x, y: b.y, w: b.w })));
+  } catch (err) {
+    res.status(err instanceof ValidationError ? 400 : 500).json({ error: err.message });
+  }
+});
+
+// Saves the post; brand videos come with the contact card at the end.
+app.get('/api/jobs/:id/download', async (req, res) => {
+  const job = getJob(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  try {
+    const file = await downloadFile(job);
+    res.download(file, `${(job.title || 'post').replace(/[^\w -]/g, '').trim() || 'post'}${path.extname(file)}`);
   } catch (err) {
     res.status(err instanceof ValidationError ? 400 : 500).json({ error: err.message });
   }

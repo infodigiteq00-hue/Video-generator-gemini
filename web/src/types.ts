@@ -37,6 +37,8 @@ export interface Job {
   cleanUrl?: string | null;
   /** Where the client placed their logo; null = no logo */
   logo?: LogoPlace | null;
+  /** The product or service a brand post was built around */
+  featured?: string | null;
   /** Brand post that turns into a video once the image is ready */
   makesVideo?: boolean;
   /** Job whose output image was used as input */
@@ -108,6 +110,29 @@ export interface Brand {
     fonts: string[];
   } | null;
   websiteError?: string | null;
+  /** Products or services the client wants in their posts */
+  featured?: string[];
+  /** Shown on the closing card of videos when `endCard` is on */
+  contact?: Contact;
+  endCard?: boolean;
+}
+
+export interface Contact {
+  phone?: string;
+  email?: string;
+  website?: string;
+  address?: string;
+}
+
+export interface BrandInput {
+  id?: string;
+  name: string;
+  industry: string;
+  website?: string;
+  featured: string[];
+  contact: Contact;
+  endCard: boolean;
+  logo: File | null;
 }
 
 export interface BrandPostInput {

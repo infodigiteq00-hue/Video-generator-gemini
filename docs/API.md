@@ -63,15 +63,21 @@ Returns `201` with a `Job`, or `400 { "error": "..." }`.
 
 ## Brand kits
 
-### `POST /api/brands` — `multipart/form-data`: `industry` (required), `name`, `logo` (required file) → `201 Brand`
+### `POST /api/brands` — `multipart/form-data`: `industry` and `name` (required), `logo` (required file), `website`, `featured` (JSON array of up to 10 product/service names), `contact` (JSON `{ phone?, email?, website?, address? }`), `endCard` (`true`/`false`: close videos with the contact card) → `201 Brand`
 ### `PUT /api/brands/:id` — same fields, `logo` optional → `Brand`
 ### `GET /api/brands/:id` → `Brand`
 
 ```ts
-interface Brand { id: string; name: string; industry: string; logoUrl: string; colors: string[]; style: string }
+interface Brand {
+  id: string; name: string; industry: string; logoUrl: string; colors: string[]; style: string;
+  featured: string[]; contact: { phone?: string; email?: string; website?: string; address?: string }; endCard: boolean;
+}
 ```
 
 ### `POST /api/brand-posts` — JSON
 `{ brandId, chatId, request, aspectRatio, imageSize, resolution, durationSeconds, provider }` → `201 Job` (the image).
 The server writes the brief, makes the image, stamps the logo, then creates the follow-up video job itself
-(`auto: true`, same `chatId`, `sourceJobId` = the image). Jobs gain `request`, `title`, `brandId`, `auto`, `followUpError`.
+(`auto: true`, same `chatId`, `sourceJobId` = the image). Jobs gain `request`, `title`, `brandId`, `auto`, `followUpError`,
+`featured` (the product or service the post was built around).
+
+### `GET /api/jobs/:id/download` → the file as an attachment. Brand videos get the contact card appended (made on first download, then cached).

@@ -1,4 +1,4 @@
-import type { AppConfig, Brand, BrandPostInput, CreateJobInput, Job, LogoPlace } from './types';
+import type { AppConfig, Brand, BrandInput, BrandPostInput, CreateJobInput, Job, LogoPlace } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -91,11 +91,14 @@ export const api = {
   },
 
   /** Create (no id) or update a brand kit. The logo is required when creating. */
-  saveBrand(input: { id?: string; name: string; industry: string; website?: string; logo: File | null }): Promise<Brand> {
+  saveBrand(input: BrandInput): Promise<Brand> {
     const fd = new FormData();
     fd.append('name', input.name);
     fd.append('industry', input.industry);
     fd.append('website', input.website ?? '');
+    fd.append('featured', JSON.stringify(input.featured));
+    fd.append('contact', JSON.stringify(input.contact));
+    fd.append('endCard', String(input.endCard));
     if (input.logo) fd.append('logo', input.logo, input.logo.name);
     return request<Brand>(input.id ? `/api/brands/${encodeURIComponent(input.id)}` : '/api/brands', {
       method: input.id ? 'PUT' : 'POST',

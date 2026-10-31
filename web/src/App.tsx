@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Check, Film, Image as ImageIcon, LayoutTemplate, Menu, Pencil, SquarePen, Stamp, Sun, Type } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, Menu, Sparkles, SquarePen } from 'lucide-react';
 import { api } from './api';
 import { APP_NAME } from './config';
-import { formatCost } from './format';
+import { upcoming, when } from './festivals';
 import { useJobs } from './hooks/useJobs';
-import { detectKind } from './intent';
-import type { AppConfig, Brand, Job, Kind, LogoPlace, PageId, Provider } from './types';
+import type { AppConfig, Brand, Job, LogoPlace, PageId, Provider } from './types';
 import { BrandSetup } from './components/BrandSetup';
-import { Composer, type Settings } from './components/Composer';
 import { FilmWall } from './components/FilmWall';
 import { Logo } from './components/Logo';
+import { Post, Waiting } from './components/Post';
 import { Sidebar, type ChatSummary } from './components/Sidebar';
 import { Soon } from './components/Soon';
-import { Actions, Thread, type Item, type Note } from './components/Thread';
 
 const LEGACY = 'earlier';
 const BRAND_KEY = 'digiteq.brandId';
@@ -34,13 +32,8 @@ const store = {
 };
 const newId = () => crypto.randomUUID();
 
-const FESTIVALS = [
-  'Diwali', 'Dhanteras', 'Bhai Dooj', 'Chhath Puja', 'Guru Nanak Jayanti', 'Christmas', 'New Year',
-  'Lohri', 'Makar Sankranti', 'Pongal', 'Republic Day', 'Vasant Panchami', 'Maha Shivratri', 'Holi',
-  'Gudi Padwa', 'Ugadi', 'Ram Navami', 'Eid al-Fitr', 'Baisakhi', 'Akshaya Tritiya', 'Buddha Purnima',
-  'Eid al-Adha', 'Raksha Bandhan', 'Independence Day', 'Janmashtami', 'Ganesh Chaturthi', 'Onam',
-  'Navratri', 'Durga Puja', 'Dussehra', 'Karva Chauth',
-];
+// Every post is a 9:16 reel: the image first, then an 8 second video made from it.
+const FORMAT = { aspectRatio: '9:16', imageSize: '2K', resolution: '720p', durationSeconds: 8 } as const;
 
 export default function App() {
   const [page, setPage] = useState<PageId>('chat');
@@ -48,18 +41,14 @@ export default function App() {
   const [offline, setOffline] = useState<string | null>(null);
   const [provider, setProvider] = useState<Provider>('mock');
   const [chatId, setChatId] = useState<string>(newId);
-  const [notes, setNotes] = useState<Note[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [brand, setBrand] = useState<Brand | null>(null);
   const [brandLoaded, setBrandLoaded] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
-  const [editing, setEditing] = useState<Job | null>(null);
-  const [logoJobId, setLogoJobId] = useState<string | null>(null);
-  const [settledFor, setSettledFor] = useState<string | null>(null); // "Looks perfect" on this job
-  const [settings, setSettings] = useState<Settings>({ aspectRatio: '9:16', resolution: '720p', durationSeconds: 8, imageSize: '2K' });
+  const [busy, setBusy] = useState<{ request: string; since: string } | null>(null);
   const { jobs, upsert, remove } = useJobs();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
+  const festivals = useMemo(upcoming, []);
+  const [festival, setFestival] = useState(festivals.suggested?.name ?? 'Diwali');
 
   useEffect(() => {
     api
@@ -81,158 +70,52 @@ export default function App() {
       .finally(() => setBrandLoaded(true));
   }, []);
 
-  const chats: ChatSummary[] = useMemo(() => {
-    const map = new Map<string, ChatSummary & { first: string }>();
-    const add = (id: string, title: string, at: string) => {
-      const c = map.get(id);
-      if (!c) map.set(id, { id, title, updatedAt: at, first: at });
-      else {
-        if (at > c.updatedAt) c.updatedAt = at;
-        if (at < c.first) Object.assign(c, { first: at, title });
-      }
-    };
-    for (const j of jobs) if (!j.auto) add(j.chatId ?? LEGACY, j.chatId ? (j.title ?? j.request ?? j.prompt) : 'Earlier', j.createdAt);
-    for (const n of notes) if (n.role === 'user') add(n.chatId, n.text, n.createdAt);
-    return [...map.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  }, [jobs, notes]);
+  // One post per chat id: the brand image plus the video made from it.
+  const posts: ChatSummary[] = useMemo(
+    () =>
+      jobs
+        .filter((j) => !j.auto)
+        .map((j) => ({ id: j.chatId ?? LEGACY, title: j.title ?? j.request ?? j.prompt, updatedAt: j.updatedAt }))
+        .filter((p, i, all) => all.findIndex((x) => x.id === p.id) === i),
+    [jobs],
+  );
+  const mine = jobs.filter((j) => (j.chatId ?? LEGACY) === chatId);
+  // The latest image in this post (a retry replaces it) and the video made from it.
+  const image = mine.filter((j) => j.kind === 'image').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+  const video = (image && mine.filter((j) => j.kind === 'video' && j.sourceJobId === image.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]) || null;
 
-  const items: Item[] = useMemo(() => {
-    const list: Item[] = [
-      ...jobs.filter((j) => (j.chatId ?? LEGACY) === chatId).map((job) => ({ type: 'job' as const, job, createdAt: job.createdAt })),
-      ...notes.filter((n) => n.chatId === chatId).map((note) => ({ type: 'note' as const, note, createdAt: note.createdAt })),
-    ];
-    return list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  }, [jobs, notes, chatId]);
-
-  // The newest result, once nothing is left rendering: that's the one we offer to change.
-  const last = items[items.length - 1];
-  const finished = last?.type === 'job' && last.job.status === 'succeeded' && !last.job.makesVideo ? last.job : null;
-
-  const toBottom = useCallback((smooth = true) => {
-    const el = scrollRef.current;
-    if (el && stick.current) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-  }, []);
-  useLayoutEffect(() => toBottom(), [items.length, finished?.id, toBottom]);
-  useLayoutEffect(() => {
-    stick.current = true;
-    toBottom(false);
-  }, [chatId, toBottom]);
-
-  const price = {
-    image: provider === 'mock' ? 0 : (config?.image.pricePerImage[settings.imageSize] ?? 0),
-    video: provider === 'mock' ? 0 : (config?.providers.find((p) => p.id === provider)?.pricePerSecond[settings.resolution] ?? 0) * settings.durationSeconds,
-  };
-  const costLabel = (usd: number) => (usd ? ` · ${formatCost(usd)}` : '');
-
-  function addNotes(...list: Omit<Note, 'id' | 'chatId' | 'createdAt'>[]) {
-    const now = Date.now();
-    setNotes((n) => [...n, ...list.map((x, i) => ({ ...x, id: newId(), chatId, createdAt: new Date(now + i).toISOString() }))]);
-  }
-  const fail = (e: unknown) => addNotes({ role: 'assistant', text: e instanceof Error ? e.message : 'Something went wrong.' });
-
-  async function post(input: { request?: string; kind?: Kind; changeOf?: string; change?: string; animate?: boolean }) {
-    if (!brand) return false;
-    stick.current = true;
+  async function generate(input: { request?: string; changeOf?: string; change?: string; animate?: boolean }) {
+    if (!brand) return;
+    setBusy({ request: input.request ?? image?.request ?? 'festival', since: new Date().toISOString() });
+    setOffline(null);
     try {
       const job = await api.createBrandPost({
         brandId: brand.id,
         chatId: chatId === LEGACY ? newId() : chatId,
         request: input.request ?? '',
-        kind: input.kind,
+        kind: 'video',
         changeOf: input.changeOf,
         change: input.change,
         animate: input.animate,
-        ...settings,
+        ...FORMAT,
         provider,
       });
       upsert(job);
-      if (chatId === LEGACY && job.chatId) setChatId(job.chatId);
-      return true;
+      if (job.chatId) setChatId(job.chatId);
     } catch (e) {
-      fail(e);
-      return false;
+      setOffline(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(null);
     }
   }
 
-  async function send(text: string): Promise<boolean> {
-    if (editing) {
-      const target = editing;
-      setEditing(null);
-      return post({ changeOf: target.id, change: text });
+  async function placeLogo(job: Job, place: LogoPlace | null) {
+    try {
+      upsert(await api.placeLogo(job.id, place));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Couldn’t place the logo.');
     }
-    // "Diwali video" already says what to make; otherwise ask.
-    const kind = detectKind(text, false, null);
-    if (kind) return post({ request: text, kind });
-    const ids: string[] = [newId(), newId()];
-    const now = Date.now();
-    const choose = async (k: Kind) => {
-      // Keep the conversation on screen while the brief is written (10–20 s), then hand over to the post.
-      setNotes((n) =>
-        n.map((x) => (x.id === ids[1] ? { ...x, text: `Designing your ${text} ${k === 'video' ? 'video' : 'post'}…`, actions: undefined } : x)),
-      );
-      await post({ request: text, kind: k });
-      setNotes((n) => n.filter((x) => !ids.includes(x.id)));
-    };
-    setNotes((n) => [
-      ...n,
-      { id: ids[0], chatId, role: 'user', text, createdAt: new Date(now).toISOString() },
-      {
-        id: ids[1],
-        chatId,
-        role: 'assistant',
-        text: `Lovely! Should we make your ${text} post as an image or a video?`,
-        createdAt: new Date(now + 1).toISOString(),
-        actions: [
-          { label: `Image${costLabel(price.image)}`, icon: ImageIcon, run: () => void choose('image') },
-          { label: `Video${costLabel(price.image + price.video)}`, icon: Film, primary: true, run: () => void choose('video') },
-        ],
-      },
-    ]);
-    stick.current = true;
-    return true;
   }
-
-  const handlers = {
-    onAnimate: (job: Job) => void post({ changeOf: job.id, change: 'Make it a video', animate: true }),
-    onRetry: (job: Job) => void (job.sourceJobId ? post({ changeOf: job.sourceJobId, change: job.request ?? '' }) : post({ request: job.request ?? job.prompt, kind: job.makesVideo ? 'video' : 'image' })),
-    onDelete: async (job: Job) => {
-      if (confirm(`Delete this ${job.kind}? This can't be undone.`)) await remove(job.id).catch(fail);
-    },
-    onMediaLoad: () => toBottom(),
-    logoUrl: brand?.logoUrl ?? null,
-    logoJobId,
-    onLogoEdit: (job: Job | null) => setLogoJobId(job?.id ?? null),
-    onPlaceLogo: async (job: Job, place: LogoPlace | null) => {
-      try {
-        upsert(await api.placeLogo(job.id, place));
-        setLogoJobId(null);
-      } catch (e) {
-        fail(e);
-      }
-    },
-  };
-
-  const changeOffer = finished && settledFor !== finished.id && logoJobId !== finished.id && (
-    <>
-      <p className="mb-2 text-[13px] text-[color:var(--text-2)]">Want any changes?</p>
-      <Actions
-        compact
-        actions={[
-          ...(finished.brandId && !finished.logo
-            ? [{ label: 'Place your logo', icon: Stamp, primary: true, run: () => setLogoJobId(finished.id) }]
-            : []),
-          { label: 'Brighter colours', icon: Sun, run: () => void post({ changeOf: finished.id, change: 'Make the colours brighter and more vibrant' }) },
-          { label: 'A different design', icon: LayoutTemplate, run: () => void post({ changeOf: finished.id, change: 'Try a completely different concept and layout' }) },
-          { label: 'Change the text', icon: Type, run: () => setEditing(finished) },
-          ...(finished.kind === 'image'
-            ? [{ label: `Make it a video${costLabel(price.video)}`, icon: Film, run: () => handlers.onAnimate(finished) }]
-            : []),
-          { label: 'Something else…', icon: Pencil, run: () => setEditing(finished) },
-          { label: 'Looks perfect', icon: Check, primary: Boolean(finished.logo), run: () => setSettledFor(finished.id) },
-        ]}
-      />
-    </>
-  );
 
   if (!brandLoaded) return null;
   if (!brand) {
@@ -249,47 +132,27 @@ export default function App() {
     );
   }
 
-  const empty = items.length === 0;
-  const composer = (
-    <Composer
-      config={config}
-      placeholder={editing ? 'What should change? e.g. say “Happy Diwali from our family”' : 'Which festival? e.g. Diwali, Dussehra, Holi'}
-      editing={editing ? { title: editing.title ?? editing.request ?? 'this post', onCancel: () => setEditing(null) } : null}
-      autoFocus
-      settings={settings}
-      onSettings={setSettings}
-      onSend={send}
-      festivals={FESTIVALS}
-    />
-  );
+  const open = (id: string) => {
+    setChatId(id);
+    setPage('chat');
+    setMenuOpen(false);
+  };
+  const next = festivals.list.find((f) => f.name === festival);
 
   return (
     <div className="flex h-full overflow-hidden">
       <Sidebar
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        chats={chats}
+        chats={posts}
         chatId={chatId}
         page={page}
-        onNewChat={() => {
-          setChatId(newId());
-          setEditing(null);
-          setPage('chat');
-          setMenuOpen(false);
-        }}
-        onOpenChat={(id) => {
-          setChatId(id);
-          setEditing(null);
-          setPage('chat');
-          setMenuOpen(false);
-        }}
+        onNewChat={() => open(newId())}
+        onOpenChat={open}
         onPage={(p) => {
           setPage(p);
           setMenuOpen(false);
         }}
-        config={config}
-        provider={provider}
-        onProvider={setProvider}
         brand={brand}
         onEditBrand={() => {
           setBrandOpen(true);
@@ -305,7 +168,7 @@ export default function App() {
           </button>
           <Logo size={22} />
           <span className="text-[14px] font-semibold">{APP_NAME}</span>
-          <button className="btn-ghost-icon ml-auto" aria-label="New post" onClick={() => setChatId(newId())}>
+          <button className="btn-ghost-icon ml-auto" aria-label="New post" onClick={() => open(newId())}>
             <SquarePen className="h-[17px] w-[17px]" />
           </button>
         </header>
@@ -314,50 +177,68 @@ export default function App() {
           <div className="flex-1 overflow-y-auto">
             <Soon page={page} onBack={() => setPage('chat')} />
           </div>
-        ) : empty ? (
+        ) : busy && !image ? (
+          <div className="relative isolate grid flex-1 place-items-center overflow-y-auto px-4 py-10">
+            <div className="aurora -z-10" />
+            <Waiting request={busy.request} since={busy.since} />
+          </div>
+        ) : image ? (
+          <div className="scrollbar-thin relative isolate grid flex-1 place-items-center overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-10">
+            <div className="aurora -z-10" />
+            <Post
+              image={image}
+              video={video}
+              logoUrl={brand.logoUrl}
+              onPlaceLogo={placeLogo}
+              onRetry={() => void generate({ request: image.request ?? image.prompt })}
+              onMakeVideo={() => void generate({ changeOf: image.id, change: 'Make it a video', animate: true })}
+              onDelete={async () => {
+                if (!confirm('Delete this post and its video? This can’t be undone.')) return;
+                for (const j of mine) await remove(j.id).catch(() => {});
+                open(newId());
+              }}
+            />
+          </div>
+        ) : (
           <div className="relative isolate flex flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-10">
             <div className="aurora -z-10" />
             <div className="absolute inset-0 -z-10">
               <FilmWall jobs={jobs} />
             </div>
-            <div className="appear w-full max-w-3xl text-center">
+            <div className="appear w-full max-w-2xl text-center">
               <img src={brand.logoUrl} alt={`${brand.name} logo`} className="mx-auto mb-6 h-14 max-w-[180px] rounded-xl bg-white/90 object-contain p-2" />
-              <h1 className="display text-[clamp(2.2rem,5.2vw,4.2rem)]">
-                What are we <span className="serif pr-[0.06em]">celebrating?</span>
-              </h1>
-              <p className="mx-auto mt-4 max-w-lg text-[16px] leading-relaxed text-[color:var(--text-2)]">
-                Pick a festival and press Generate. We design it for {brand.name} in your colours.
+              <p className="text-[15px] text-[color:var(--text-2)]">What are we celebrating?</p>
+              <label className="relative mx-auto mt-2 inline-flex max-w-full cursor-pointer items-center gap-2">
+                <span className="sr-only">Festival</span>
+                <span className="display serif truncate pr-[0.06em] text-[clamp(2.8rem,9vw,5.5rem)]">{festival}</span>
+                <ChevronDown className="h-7 w-7 shrink-0 text-[color:var(--text-2)]" />
+                <select
+                  value={festival}
+                  onChange={(e) => setFestival(e.target.value)}
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                  aria-label="Choose a festival"
+                >
+                  {festivals.list.map((f) => (
+                    <option key={`${f.name}-${f.date}`} value={f.name} className="bg-neutral-900">
+                      {f.name} · {when(f)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {next && <p className="mono-num mt-3 text-[14px] text-[color:var(--text-2)]">{when(next)}</p>}
+              <button className="btn-light mx-auto mt-9 h-12 px-7 text-[15px]" disabled={Boolean(busy) || !config} onClick={() => void generate({ request: festival })}>
+                <Sparkles className="h-4 w-4" /> Generate my {festival} post
+              </button>
+              <p className="mx-auto mt-4 max-w-md text-[13.5px] leading-relaxed text-[color:var(--text-3)]">
+                A custom post and video for {brand.name}, in your colours.
               </p>
-              <div className="mt-9 text-left">{composer}</div>
               {offline && (
                 <p role="alert" className="mt-3 text-[13px] text-[color:var(--red)]">
                   {offline}
                 </p>
               )}
-
             </div>
           </div>
-        ) : (
-          <>
-            <div
-              ref={scrollRef}
-              className="scrollbar-thin flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
-              onScroll={(e) => {
-                const el = e.currentTarget;
-                stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-              }}
-            >
-              <Thread items={items} h={handlers} after={changeOffer || undefined} />
-            </div>
-            <div className="dock shrink-0 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
-              <div className="mx-auto max-w-3xl">
-                {composer}
-                <p className="mt-2 hidden text-center text-[11.5px] text-[color:var(--text-3)] sm:block">
-                  {provider === 'mock' ? 'Demo mode: placeholder results, no API cost.' : `Designed for ${brand.name}`}
-                </p>
-              </div>
-            </div>
-          </>
         )}
       </main>
     </div>

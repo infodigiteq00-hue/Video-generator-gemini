@@ -1,6 +1,6 @@
 # Digiteq Studio
 
-A browser-based creative studio with a chat layout. Ask for an image or a video; say "animate it" to turn an image into a video.
+A browser-based studio that makes festival posts and videos for a business: pick a festival, press Generate.
 
 | Stage | Status |
 |---|---|
@@ -44,18 +44,19 @@ Known limitation: OpenAI developers report that images ChatGPT *generates* aren'
 
 ## How it works (the product)
 
-1. **Welcome screen (once):** business name, logo, what the business does, and optionally the website. The server reads the website (homepage + About/Products/Services pages, CSS colours and fonts, a few photos; public addresses only, honest `DigiteqStudioBot` user agent) and Gemini turns it into a company profile (products, audience, tone, visual style) used in every brief (`server/src/website.js`). Gemini reads the logo's colours and style (`server/src/brand.js`). The brand is remembered in this browser.
-2. **The user types only a festival or occasion**, e.g. "Diwali" or "Dussehra" (or taps one of the festival chips).
-3. The app asks **"Image or video?"** (skipped if they typed "Diwali video").
-4. Gemini writes the full creative brief from the business details + festival. Nano Banana 2 makes the image, leaving the top-right corner clear, and ffmpeg stamps the **real logo** there. For video, Veo then animates the logo-free image and the logo is stamped on the video too.
+1. **Welcome screen (once), four steps:**
+   1. **What the business does** (with quick-pick chips) and optionally the website. The server reads the website (homepage + About/Products/Services pages, CSS colours and fonts, a few photos; public addresses only, honest `DigiteqStudioBot` user agent) and Gemini turns it into a company profile (products, audience, tone, visual style) used in every brief (`server/src/website.js`).
+   2. **Products or services to feature** (up to 10). Each post is built around one of them; the brief writer picks the best fit for the occasion and rotates away from the ones used in recent posts.
+   3. **Business name and logo.** Gemini reads the logo's colours and style (`server/src/brand.js`).
+   4. **Contact details** (optional: phone, email, website, address). Downloaded videos end with a 3-second closing card (logo, name, contact details) drawn by ffmpeg, so numbers are always exact (`addEndCard` in `server/src/brand.js`).
+   The brand is remembered in this browser and can be edited from the sidebar.
+2. **Home screen:** the nearest big festival is suggested from the calendar (`web/src/festivals.ts`; Indian festivals for devices on India time, worldwide ones for everyone). The user can pick another from the dropdown and presses **Generate**. Every post is a 9:16 image plus an 8 second video. Lunar festival dates are listed per year: add the next year's dates before the list runs out.
+3. **Wait screen:** shows the steps (idea, post, video) and a timer while it works. No chat.
+4. Gemini writes the full creative brief from the business details, featured products and festival. Nano Banana 2 makes the image, leaving the top-right corner clear; Gemini Omni then animates the logo-free image.
    **Variety:** every new post gets a different art style (12 rotating directions in `STYLES`, `server/src/brand.js`) and the AI is told which concepts it already made for that occasion so it never repeats one. **Video** prompts are written as an editor's timed shot list (hook, two build shots with transitions, final hero shot with the greeting, music cut to the beats), timed to the chosen length.
-5. When it's done the app asks **"Want any changes?"**: brighter colours, a different design, change the text, make it a video, something else (free text), or looks perfect. Changes use the previous image as the starting point.
+5. **Result:** the image appears first, then the video. The client places their logo on each (ffmpeg stamps the real logo) and downloads. Videos download with the contact card appended (`GET /api/jobs/:id/download`).
 
 Cost: about $0.10 per image post (2K) and $0.50 per video post (image + 8 s video).
-
-## How the chat decides what to make
-
-`web/src/intent.ts`: video words ("video", "animate", "clip", "film"…) make a video, image words ("image", "picture", "photo", "visual", "poster"…) make an image. An attached image with no other hint is animated. "Animate it" or "make it darker" refers to the last image in the chat. If it can't tell, it asks. The Auto / Image / Video switch in the composer overrides it.
 
 ## Cost
 

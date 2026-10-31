@@ -6,7 +6,7 @@ import path from 'node:path';
 import { omni } from './providers/omni.js';
 import { mock } from './providers/mock.js';
 import { mockImage, nanoBanana } from './providers/image.js';
-import { getBrand, stampLogo } from './brand.js';
+import { addEndCard, getBrand, hasContact, stampLogo } from './brand.js';
 import { DATA_DIR, OUTPUTS_DIR, UPLOADS_DIR } from './paths.js';
 
 export { DATA_DIR, UPLOADS_DIR };
@@ -85,7 +85,7 @@ function copyImage(source) {
 // Throws ValidationError for bad input; the caller owns cleaning up `image` then.
 export function createJob({
   kind, chatId, prompt, negativePrompt, aspectRatio, resolution, durationSeconds, imageSize, provider: providerId, image, sourceJobId,
-  request, title, brandId, next, auto, concept, style,
+  request, title, brandId, next, auto, concept, style, featured,
 }) {
   kind ||= 'video';
   prompt = (prompt || '').trim();
@@ -130,6 +130,7 @@ export function createJob({
     title: title || null,
     concept: concept || null, // the idea behind a brand post, so later posts can avoid repeating it
     style: style || null,
+    featured: featured || null, // the product or service this brand post was built around
     brandId: brandId || null,
     next: next || null, // brand posts: the video to make once the image is ready
     auto: Boolean(auto), // created by the app (follow-up video), not typed by the user
@@ -178,12 +179,23 @@ export async function placeLogo(job, place) {
   return job;
 }
 
+// The file the Download button gives: brand videos get the client's contact card appended,
+// made on first download and kept until the logo or the contact details change.
+export async function downloadFile(job) {
+  if (job.status !== 'succeeded') throw new ValidationError('This post is not ready yet');
+  const brand = job.kind === 'video' && job.brandId && getBrand(job.brandId);
+  if (!hasContact(brand)) return job.outputPath;
+  const file = path.join(OUTPUTS_DIR, `${path.basename(job.outputPath, '.mp4')}-card-${Date.parse(brand.updatedAt)}.mp4`);
+  if (!fs.existsSync(file)) await addEndCard(job.outputPath, file, brand);
+  return file;
+}
+
 export function deleteJob(job) {
   jobs.delete(job.id);
   save();
   if (job.imagePath) fs.rmSync(job.imagePath, { force: true });
-  if (job.cleanPath) fs.rmSync(job.cleanPath, { force: true });
-  fs.rmSync(job.outputPath || path.join(OUTPUTS_DIR, `${job.id}.mp4`), { force: true });
+  // Every output of this job (with or without logo, with contact card) starts with its id.
+  for (const f of fs.readdirSync(OUTPUTS_DIR)) if (f.startsWith(job.id)) fs.rmSync(path.join(OUTPUTS_DIR, f), { force: true });
 }
 
 // ---- Worker ----
