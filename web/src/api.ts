@@ -1,4 +1,17 @@
-import type { AppConfig, Brand, BrandInput, BrandPostInput, CreateJobInput, Job, LogoPlace } from './types';
+import type { AppConfig, Brand, BrandInput, BrandPostInput, CreateJobInput, Customer, Job, LogoPlace, User } from './types';
+
+function brandForm(input: BrandInput) {
+  const fd = new FormData();
+  fd.append('name', input.name);
+  fd.append('industry', input.industry);
+  fd.append('website', input.website ?? '');
+  fd.append('featured', JSON.stringify(input.featured));
+  fd.append('contact', JSON.stringify(input.contact));
+  fd.append('endCard', String(input.endCard));
+  fd.append('colors', JSON.stringify(input.colors));
+  if (input.logo) fd.append('logo', input.logo, input.logo.name);
+  return fd;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -14,12 +27,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(path, init);
   } catch {
-    throw new ApiError('Cannot reach the server. Is the backend running on port 8787?', 0);
+    throw new ApiError('Can’t connect right now. Check your internet and try again.', 0);
   }
   if (!res.ok) {
     let message =
       res.status >= 500
-        ? `Server error (${res.status}). Is the backend running on port 8787?`
+        ? `Something went wrong on our side (${res.status}). Please try again.`
         : `Request failed (${res.status})`;
     try {
       const body = (await res.json()) as { error?: unknown };
@@ -36,15 +49,61 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  me(): Promise<{ email: string }> {
-    return request<{ email: string }>('/api/me');
+  me(): Promise<User> {
+    return request<User>('/api/me');
   },
 
-  login(email: string, password: string): Promise<{ email: string }> {
-    return request<{ email: string }>('/api/login', {
+  /** `login` is an email address or a mobile number. */
+  login(login: string, password: string): Promise<User> {
+    return request<User>('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ login, password }),
+    });
+  },
+
+  /** End of the funnel: the brand answers plus a login. Creates the account (payment pending) and signs in. */
+  signup(input: BrandInput & { email: string; phone: string; password: string }): Promise<User> {
+    const fd = brandForm(input);
+    fd.append('email', input.email);
+    fd.append('phone', input.phone);
+    fd.append('password', input.password);
+    return request<User>('/api/signup', { method: 'POST', body: fd });
+  },
+
+  getInvite(token: string): Promise<{ email: string | null; phone: string | null }> {
+    return request(`/api/invites/${encodeURIComponent(token)}`);
+  },
+
+  acceptInvite(token: string, input: { email: string; phone: string; password: string }): Promise<User> {
+    return request<User>(`/api/invites/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  },
+
+  publicStats(): Promise<{ paid: number }> {
+    return request('/api/public/stats');
+  },
+
+  customers(): Promise<Customer[]> {
+    return request<Customer[]>('/api/admin/users');
+  },
+
+  setPaid(id: string, paid: boolean): Promise<void> {
+    return request<void>(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paid }),
+    });
+  },
+
+  invite(input: { email: string; phone: string }): Promise<{ url: string }> {
+    return request('/api/admin/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
     });
   },
 
@@ -92,15 +151,7 @@ export const api = {
 
   /** Create (no id) or update a brand kit. The logo is required when creating. */
   saveBrand(input: BrandInput): Promise<Brand> {
-    const fd = new FormData();
-    fd.append('name', input.name);
-    fd.append('industry', input.industry);
-    fd.append('website', input.website ?? '');
-    fd.append('featured', JSON.stringify(input.featured));
-    fd.append('contact', JSON.stringify(input.contact));
-    fd.append('endCard', String(input.endCard));
-    fd.append('colors', JSON.stringify(input.colors));
-    if (input.logo) fd.append('logo', input.logo, input.logo.name);
+    const fd = brandForm(input);
     return request<Brand>(input.id ? `/api/brands/${encodeURIComponent(input.id)}` : '/api/brands', {
       method: input.id ? 'PUT' : 'POST',
       body: fd,

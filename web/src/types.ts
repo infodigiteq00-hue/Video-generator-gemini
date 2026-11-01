@@ -70,6 +70,31 @@ export interface AppConfig {
   aspectRatios: AspectRatio[];
   resolutions: Resolution[];
   rules: { '1080pRequiresDuration': DurationSeconds };
+  pack: Pack;
+}
+
+export interface Pack {
+  name: string;
+  festivals: string[];
+  /** Festivals that also get a video */
+  video: string[];
+  /** Designs allowed per festival (the first one plus redos) */
+  designs: number;
+}
+
+export interface User {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  role: 'admin' | 'customer';
+  /** Payment confirmed: the pack is unlocked */
+  paid: boolean;
+  createdAt: string;
+}
+
+export interface Customer extends User {
+  business: string | null;
+  posts: number;
 }
 
 export interface CreateJobInput {
@@ -88,7 +113,7 @@ export interface CreateJobInput {
 
 export const isActiveStatus = (s: JobStatus) => s === 'queued' || s === 'running';
 
-export type PageId = 'chat' | 'figma' | 'canva' | 'editor';
+export type PageId = 'chat' | 'figma' | 'canva' | 'editor' | 'customers';
 
 export interface Brand {
   id: string;
@@ -137,7 +162,6 @@ export interface BrandInput {
 }
 
 export interface BrandPostInput {
-  brandId: string;
   chatId: string;
   request: string;
   /** Make the video for this finished image (when its video didn't start) */

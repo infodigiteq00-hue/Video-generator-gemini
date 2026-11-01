@@ -68,6 +68,8 @@ Gemini Omni Flash bills about **$0.10 per second** of video (720p): 4 s ≈ $0.4
 
 ```
 server/   Express API. Keeps the API key server-side, runs jobs, stores videos in server/data/
+  src/db.js               SQLite: accounts, invites, brands, jobs
+  src/auth.js             Accounts: signup, login (email or mobile), invites, admin, sessions
   src/jobs.js             Job validation, storage and worker (shared by web + ChatGPT)
   src/brand.js            Brand kits: logo reading, image and video prompts, logo stamping, contact card
   src/providers/omni.js   Gemini Omni Flash video (Interactions API, synchronous)
@@ -95,8 +97,13 @@ https://digiteq-studio-production.up.railway.app (Railway, see `DEPLOY.md`). Eve
 - Rebuild: `cd mobile && npm run apk` (needs the Android SDK at `~/Android/Sdk` and JDK 21). Output: `mobile/android/app/build/outputs/apk/debug/app-debug.apk`.
 - This is a debug build for testing. The Play Store needs a signed release build (AAB).
 
-## Login
+## Website, signup and accounts
 
-One account, no sign-up (`server/src/auth.js`). Set in `server/.env`: `AUTH_EMAIL`, `AUTH_PASSWORD_HASH` (scrypt `salt:hash`, never the plain password) and `AUTH_SECRET` (signs the session cookie). Sessions last 30 days in an HttpOnly cookie; 10 wrong tries per 15 minutes locks out that address for a while. All `/api` routes need a session except login itself and `GET /api/jobs/:id` (used by the ChatGPT player). Generated files under `/media` are reachable by their unguessable names.
+- **`/`** landing page (`web/src/components/Landing.tsx`). Price, launch end date, founding seats, WhatsApp number and customer reviews are in `web/src/offer.ts`; reviews and the seat counter stay hidden until there are real ones. The pack's festivals are in `PACK` (`server/src/index.js`) and repeated on the landing page.
+- **`/start`** signup funnel: what the business does, products, name and logo/colours, **pay** (placeholder UPI QR for now), then login + video contact details. The account is created as **payment pending**: the pack stays locked until an admin marks it paid, and unlocks on the customer's screen within 15 s.
+- **`/login`**: email or mobile number + password. **`/invite/<token>`**: an admin's invite for someone who paid but couldn't sign up (sets a password, then the setup opens). Links last 7 days.
+- **Admin** = the account in `AUTH_EMAIL` / `AUTH_PASSWORD_HASH` (scrypt `salt:hash`). Admins see **Customers** (mark paid, create invite links) and can make posts for any festival. `AUTH_SECRET` signs the 30-day session cookie; 10 wrong tries per 15 minutes locks out an address for a while.
+- **Data:** SQLite (`node:sqlite`, built into Node) at `DATA_DIR/app.db`: accounts, invites, brands and jobs, each brand and job tagged with its account. Old `brands.json` / `jobs.json` are imported into the admin account on first start. Only `/media/uploads` and `/media/videos` are served; result files have unguessable names.
+- **Pack rules (customers):** only the pack's festivals, 2 designs each (the first plus one redo), a video only for Diwali, nothing until paid.
 
 The Gemini key lives only in `server/.env` (file mode 600, git-ignored) and is used only by the server; it is never sent to the browser or the Android app.

@@ -16,7 +16,9 @@ export const FESTIVALS: Festival[] = [
   F('Halloween', '2026-10-31', 'world'),
   F('Dhanteras', '2026-11-06', 'in'),
   F('Diwali', '2026-11-08', 'in', true),
-  F('Govardhan Puja', '2026-11-09', 'in'),
+  F('Govardhan Puja', '2026-11-10', 'in'),
+  F('Hindu New Year', '2026-11-10', 'in'),
+  F('Labh Pancham', '2026-11-14', 'in'),
   F('Bhai Dooj', '2026-11-11', 'in'),
   F('Chhath Puja', '2026-11-15', 'in'),
   F('Guru Nanak Jayanti', '2026-11-24', 'in', true),
@@ -54,7 +56,9 @@ export const FESTIVALS: Festival[] = [
   F('Halloween', '2027-10-31', 'world'),
   F('Dhanteras', '2027-10-27', 'in'),
   F('Diwali', '2027-10-29', 'in', true),
+  F('Hindu New Year', '2027-10-30', 'in'),
   F('Bhai Dooj', '2027-10-31', 'in'),
+  F('Labh Pancham', '2027-11-03', 'in'),
   F('Christmas', '2027-12-25', 'world', true),
 ].sort((a, b) => a.date.localeCompare(b.date));
 
@@ -74,6 +78,10 @@ export function upcoming(today = new Date()) {
   const list = FESTIVALS.filter((f) => f.date >= day && (india || f.region === 'world'));
   return { list, suggested: list.find((f) => f.major) ?? list[0] ?? null };
 }
+
+/** The next date of a festival by name (pack festivals are always in India's calendar). */
+export const nextDate = (name: string, today = new Date()) =>
+  FESTIVALS.find((f) => f.name === name && f.date >= today.toLocaleDateString('en-CA')) ?? null;
 
 /** "Today", "Tomorrow", "In 8 days · 8 Nov" */
 export function when(f: Festival, today = new Date()) {

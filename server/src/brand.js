@@ -7,26 +7,24 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { DATA_DIR } from './paths.js';
+import { adminId } from './auth.js';
+import { collection } from './db.js';
 import { fetchRetry } from './providers/http.js';
 import { WebsiteError, normalizeUrl, readWebsite } from './website.js';
 
-const BRANDS_FILE = path.join(DATA_DIR, 'brands.json');
 const TEXT_MODEL = process.env.TEXT_MODEL || 'gemini-flash-latest';
 const run = promisify(execFile);
 
 // ---- Store ----
 
-const brands = new Map();
-if (fs.existsSync(BRANDS_FILE)) {
-  for (const b of JSON.parse(fs.readFileSync(BRANDS_FILE, 'utf8'))) brands.set(b.id, b);
-}
-const save = () => fs.writeFileSync(BRANDS_FILE, JSON.stringify([...brands.values()], null, 2));
+const store = collection('brands', adminId);
+const brands = new Map(store.all().map((b) => [b.id, b]));
 
 export const getBrand = (id) => brands.get(id);
 
-// No logins yet, so the company set up most recently is "the" company on this server.
-export const currentBrand = () => [...brands.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
+// Each account has one brand (the latest, if an older account somehow has more).
+export const brandOf = (userId) =>
+  [...brands.values()].filter((b) => b.userId === userId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
 
 export function brandToPublic(b) {
   const { logoPath, logoMime, ...rest } = b;
@@ -85,7 +83,7 @@ function cleanColors(list) {
 
 // `logo` is { path, mimetype } of an uploaded file, or null to keep the current one (or for no logo).
 // Colours come from the logo; without one, from `colors` picked by hand.
-export async function saveBrand({ id, name, industry, logo, website, featured, contact, endCard, colors }) {
+export async function saveBrand({ id, userId, name, industry, logo, website, featured, contact, endCard, colors }) {
   industry = (industry || '').trim();
   name = (name || '').trim();
   if (!name) throw new BrandError('Tell us your business name');
@@ -104,7 +102,7 @@ export async function saveBrand({ id, name, industry, logo, website, featured, c
     throw new BrandError(err.message);
   }
 
-  const brand = existing ?? { id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+  const brand = existing ?? { id: crypto.randomUUID(), userId, createdAt: new Date().toISOString() };
   if (logo) {
     if (existing?.logoPath) fs.rmSync(existing.logoPath, { force: true });
     Object.assign(brand, { logoPath: logo.path, logoMime: logo.mimetype, logoUrl: `/media/uploads/${path.basename(logo.path)}` });
@@ -114,7 +112,7 @@ export async function saveBrand({ id, name, industry, logo, website, featured, c
     endCard: Object.keys(contact).length > 0 && endCard !== false && endCard !== 'false',
     updatedAt: new Date().toISOString(),
   });
-  if (logo || (brand.logoPath && !brand.colors)) Object.assign(brand, await readLogo(brand));
+  if (logo || (brand.logoPath && !brand.colors)) Object.assign(brand, await readLogo(brand).catch(() => ({ colors: [], style: '' })));
   else if (!brand.logoPath) Object.assign(brand, { logoUrl: null, colors, style: '' });
   // Read the website when it's new or changed. A site that can't be read doesn't block saving.
   if (!site) Object.assign(brand, { website: null, websiteProfile: null, websiteError: null });
@@ -127,7 +125,7 @@ export async function saveBrand({ id, name, industry, logo, website, featured, c
     }
   }
   brands.set(brand.id, brand);
-  save();
+  store.put(brand);
   return brand;
 }
 
@@ -157,6 +155,7 @@ async function askGemini({ system, parts, schema }) {
   }
 }
 
+// A logo that can't be read (no key, AI busy) never blocks saving: posts then go without brand colours.
 async function readLogo(brand) {
   if (!live()) return { colors: [], style: 'Demo mode: colours are read once a Gemini key is set' };
   return askGemini({

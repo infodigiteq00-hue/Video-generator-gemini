@@ -1,4 +1,4 @@
-import { Download, LogOut, MessageSquare, Plus, SquarePen, X } from 'lucide-react';
+import { Download, LogOut, MessageSquare, Plus, SquarePen, Users, X } from 'lucide-react';
 import { api } from '../api';
 import { useState } from 'react';
 import { useInstall } from '../hooks/useInstall';
@@ -22,11 +22,12 @@ interface Props {
   onOpenChat: (id: string) => void;
   onPage: (p: PageId) => void;
   brand: Brand | null;
+  admin: boolean;
   onEditBrand: () => void;
 }
 
 
-export function Sidebar({ open, onClose, chats, chatId, page, onNewChat, onOpenChat, brand, onEditBrand }: Props) {
+export function Sidebar({ open, onClose, chats, chatId, page, onNewChat, onOpenChat, onPage, brand, admin, onEditBrand }: Props) {
   const app = useInstall();
   const [iosHint, setIosHint] = useState(false);
   const row = 'press flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13.5px]';
@@ -47,8 +48,16 @@ export function Sidebar({ open, onClose, chats, chatId, page, onNewChat, onOpenC
 
         <div className="px-3">
           <button className={`${row} bg-white/[0.06] font-medium ring-1 ring-white/[0.07] hover:bg-white/[0.1]`} onClick={onNewChat}>
-            <SquarePen className="h-4 w-4" /> New post
+            <SquarePen className="h-4 w-4" /> {admin ? 'New post' : 'My pack'}
           </button>
+          {admin && (
+            <button
+              className={`${row} mt-1 ${page === 'customers' ? 'bg-white/[0.09] text-[color:var(--text)]' : 'text-[color:var(--text-2)] hover:bg-white/[0.05] hover:text-[color:var(--text)]'}`}
+              onClick={() => onPage('customers')}
+            >
+              <Users className="h-4 w-4" /> Customers
+            </button>
+          )}
           {brand ? (
             <button className={`${row} mt-2 hover:bg-white/[0.05]`} onClick={onEditBrand} title="Edit your brand">
               {brand.logoUrl ? (

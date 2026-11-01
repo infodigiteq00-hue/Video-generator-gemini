@@ -52,7 +52,7 @@ interface Job {
 ```
 `available: false` on Veo means no API key is configured. The UI should then default to `mock` and show a hint.
 
-### `POST /api/jobs` — `multipart/form-data`
+### `POST /api/jobs` (admins) — `multipart/form-data`
 Fields: `kind` (`video` default, or `image`), `chatId`, `prompt` (required), `negativePrompt`, `aspectRatio`, `resolution` and `durationSeconds` (video only), `provider`, `image` (optional file: png/jpeg/webp, max 10 MB), `sourceJobId` (use a finished image job's output as the input image).
 Images use Nano Banana 2 (`gemini-3.1-flash-image`, set by `IMAGE_MODEL`); an input image means "edit this". Videos use Veo 3.1 Lite; an input image means "animate this".
 Returns `201` with a `Job`, or `400 { "error": "..." }`.
@@ -82,3 +82,18 @@ With `changeOf` (a finished image id) instead of `request`, it makes that image'
 Jobs gain `request`, `title`, `brandId`, `auto`, `followUpError`.
 
 ### `GET /api/jobs/:id/download` → the file as an attachment. Brand videos get the contact card appended (made on first download, then cached).
+
+## Accounts
+
+All `/api` routes need a session cookie except: `POST /api/login`, `POST /api/logout`, `GET /api/me`, `POST /api/signup`,
+`GET|POST /api/invites/:token`, `GET /api/public/stats` and `GET /api/jobs/:id`. Jobs and brands are scoped to the signed-in account.
+
+- `POST /api/login` `{ login, password }` (`login` = email or mobile) → `User`
+- `GET /api/me` → `User` `{ id, email, phone, role: 'admin' | 'customer', paid, createdAt }`
+- `POST /api/signup` multipart: the brand fields of `POST /api/brands` plus `email` and/or `phone`, `password` → `201 User` (payment pending, signed in)
+- `GET /api/invites/:token` → `{ email, phone }`; `POST /api/invites/:token` `{ email, phone, password }` → `201 User` (paid, signed in)
+- `GET /api/public/stats` → `{ paid }` (paid customer accounts)
+- Admin: `GET /api/admin/users` → customers with `business` and `posts`; `POST /api/admin/users/:id` `{ paid }`;
+  `POST /api/admin/invites` `{ email, phone }` → `{ url }`
+- `GET /api/config` also returns `pack: { name, festivals, video, designs }`.
+- `POST /api/brand-posts` for customers: `402` until paid; `400` for a festival outside the pack or after `designs` posts for it.

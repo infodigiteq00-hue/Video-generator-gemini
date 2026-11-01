@@ -8,9 +8,10 @@ import { mock } from './providers/mock.js';
 import { mockImage, nanoBanana } from './providers/image.js';
 import { addEndCard, getBrand, hasContact, stampLogo, writeVideoPrompt } from './brand.js';
 import { DATA_DIR, OUTPUTS_DIR, UPLOADS_DIR } from './paths.js';
+import { adminId } from './auth.js';
+import { collection } from './db.js';
 
 export { DATA_DIR, UPLOADS_DIR };
-const JOBS_FILE = path.join(DATA_DIR, 'jobs.json');
 
 const POLL_MS = 5000;
 const TIMEOUT_MS = 10 * 60 * 1000;
@@ -26,33 +27,29 @@ export class ValidationError extends Error {}
 
 export const defaultProviderId = () => (omni.available ? omni.id : mock.id);
 
-// ---- Store (in memory, persisted to data/jobs.json) ----
+// ---- Store (in memory, persisted to the database) ----
 
+const store = collection('jobs', adminId);
 const jobs = new Map();
-if (fs.existsSync(JOBS_FILE)) {
-  for (const job of JSON.parse(fs.readFileSync(JOBS_FILE, 'utf8'))) {
-    job.kind ??= 'video';
-    job.chatId ??= null;
-    job.outputUrl ??= job.videoUrl;
-    jobs.set(job.id, job);
-  }
-}
-
-function save() {
-  fs.writeFileSync(JOBS_FILE, JSON.stringify([...jobs.values()], null, 2));
+for (const job of store.all()) {
+  job.kind ??= 'video';
+  job.chatId ??= null;
+  job.outputUrl ??= job.videoUrl;
+  jobs.set(job.id, job);
 }
 
 function update(job, fields) {
   Object.assign(job, fields, { updatedAt: new Date().toISOString() });
-  save();
+  store.put(job);
 }
 
 export function getJob(id) {
   return jobs.get(id);
 }
 
-export function listJobs() {
-  return [...jobs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+// One account's jobs, newest first.
+export function listJobs(userId) {
+  return [...jobs.values()].filter((j) => j.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 // Internal fields (operationName, file paths) stay on the server.
@@ -85,7 +82,7 @@ function copyImage(source) {
 // Throws ValidationError for bad input; the caller owns cleaning up `image` then.
 export function createJob({
   kind, chatId, prompt, negativePrompt, aspectRatio, resolution, durationSeconds, imageSize, provider: providerId, image, sourceJobId,
-  request, title, brandId, next, auto,
+  request, title, brandId, next, auto, userId,
 }) {
   kind ||= 'video';
   prompt = (prompt || '').trim();
@@ -123,6 +120,7 @@ export function createJob({
     id: crypto.randomUUID(),
     kind,
     chatId: chatId || null,
+    userId: userId ?? null, // the account it belongs to (ChatGPT jobs have none)
     provider: isVideo ? provider.id : providerId === 'mock' ? 'mock' : provider.id,
     status: 'queued',
     prompt,
@@ -149,7 +147,7 @@ export function createJob({
     updatedAt: now,
   };
   jobs.set(job.id, job);
-  save();
+  store.put(job);
   runJob(job);
   return job;
 }
@@ -190,7 +188,7 @@ export async function downloadFile(job) {
 
 export function deleteJob(job) {
   jobs.delete(job.id);
-  save();
+  store.del(job.id);
   if (job.imagePath) fs.rmSync(job.imagePath, { force: true });
   // Every output of this job (with or without logo, with contact card) starts with its id.
   for (const f of fs.readdirSync(OUTPUTS_DIR)) if (f.startsWith(job.id)) fs.rmSync(path.join(OUTPUTS_DIR, f), { force: true });
@@ -255,6 +253,7 @@ async function runImageJob(job) {
         request: job.request,
         title: job.title,
         brandId: job.brandId,
+        userId: job.userId,
         auto: true,
       });
     } catch (err) {

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, ImagePlus, Loader2, Plus, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ImagePlus, Loader2, MessageCircle, Plus, QrCode, X } from 'lucide-react';
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, api } from '../api';
-import type { Brand, Contact } from '../types';
+import type { Brand, Contact, User } from '../types';
 import { APP_NAME } from '../config';
+import { OFFER, priceNow, rupees, whatsappLink } from '../offer';
 import { Logo } from './Logo';
 
 interface Props {
@@ -11,13 +12,23 @@ interface Props {
   onClose: () => void;
   /** First visit: a full-screen welcome instead of a dialog. */
   asPage?: boolean;
+  /** The signup funnel: the same questions, then payment, then a login instead of saving to an account. */
+  signup?: boolean;
+  onSignedUp?: (u: User) => void;
 }
 
-const STEPS = [
-  { title: 'What does your business do?', hint: 'Every post is designed around your business, so tell us in a sentence or two.' },
-  { title: 'What should we feature?', hint: 'Add the products or services you want in your posts. We pick one for each post and rotate.' },
-  { title: 'Your name and logo', hint: 'Your name goes in the greeting. Upload your logo, or pick your brand colours if you don’t have one.' },
-  { title: 'Contact details', hint: 'Optional. We add them to a closing card at the end of your videos, so customers know how to reach you.' },
+type StepKey = 'business' | 'products' | 'brand' | 'contact' | 'pay' | 'account';
+const BUSINESS = { key: 'business', title: 'What does your business do?', hint: 'Every post is designed around your business, so tell us in a sentence or two.' } as const;
+const PRODUCTS = { key: 'products', title: 'What should we feature?', hint: 'Add the products or services you want in your posts.' } as const;
+const BRAND = { key: 'brand', title: 'Your name and logo', hint: 'Your name goes in the greeting. Upload your logo, or pick your brand colours if you don’t have one.' } as const;
+const STEPS: { key: StepKey; title: string; hint: string }[] = [
+  BUSINESS, PRODUCTS, BRAND,
+  { key: 'contact', title: 'Contact details', hint: 'Optional. We add them to a closing card at the end of your videos, so customers know how to reach you.' },
+];
+const SIGNUP_STEPS: { key: StepKey; title: string; hint: string }[] = [
+  BUSINESS, PRODUCTS, BRAND,
+  { key: 'pay', title: `Pay ${rupees(priceNow())} by UPI`, hint: 'Scan the code with Google Pay, PhonePe, Paytm or any bank app.' },
+  { key: 'account', title: 'Create your login', hint: 'Log in later with your email or mobile number.' },
 ];
 
 // Tapping one fills the description with a starting sentence the client can edit.
@@ -39,8 +50,11 @@ const BUSINESSES: [string, string][] = [
 const input =
   'w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[16px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]';
 
-export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
+export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp }: Props) {
+  const steps = signup ? SIGNUP_STEPS : STEPS;
   const [step, setStep] = useState(0);
+  const key = steps[step].key;
+  const [login, setLogin] = useState({ email: '', phone: '', password: '' });
   const [industry, setIndustry] = useState(brand?.industry ?? '');
   const [website, setWebsite] = useState(brand?.website ?? '');
   const [featured, setFeatured] = useState<string[]>(brand?.featured ?? []);
@@ -55,7 +69,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const last = step === STEPS.length - 1;
+  const last = step === steps.length - 1;
 
   useEffect(() => {
     if (!logo) return;
@@ -94,6 +108,8 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
     if (upTo >= 0 && !industry.trim()) return [0, 'Tell us what your business does. Every post is designed around it.'];
     if (upTo >= 1 && !featured.length && !draft.trim()) return [1, 'Add at least one product or service to feature.'];
     if (upTo >= 2 && !name.trim()) return [2, 'Tell us your business name.'];
+    if (signup && upTo >= 4 && !login.email.trim() && !login.phone.trim()) return [4, 'Enter your email or mobile number to log in with.'];
+    if (signup && upTo >= 4 && login.password.length < 6) return [4, 'Use a password of at least 6 characters.'];
     return null;
   }
 
@@ -102,14 +118,14 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
     const p = problem(step);
     if (p) return setError(p[1]);
     setError(null);
-    if (step + 1 === STEPS.length - 1 && !contact.website && website.trim()) setContact({ ...contact, website: website.trim() });
+    if (['contact', 'account'].includes(steps[step + 1].key) && !contact.website && website.trim()) setContact({ ...contact, website: website.trim() });
     setStep(step + 1);
   }
 
   async function save(withContact = true) {
     const items = draft.trim() ? [...new Set([...featured, ...draft.split(/[,\n]/).map((x) => x.trim()).filter(Boolean)])] : featured;
     if (draft.trim()) addFeatured(draft);
-    const p = problem(STEPS.length);
+    const p = problem(steps.length);
     if (p) {
       setStep(p[0]);
       return setError(p[1]);
@@ -117,18 +133,20 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
     const details = withContact ? contact : {};
     setBusy(true);
     setError(null);
+    const input = {
+      id: brand?.id,
+      name: name.trim(),
+      industry: industry.trim(),
+      website: website.trim(),
+      featured: items,
+      contact: details,
+      endCard: withContact && endCard,
+      colors: preview ? [] : colors,
+      logo,
+    };
     try {
-      const b = await api.saveBrand({
-        id: brand?.id,
-        name: name.trim(),
-        industry: industry.trim(),
-        website: website.trim(),
-        featured: items,
-        contact: details,
-        endCard: withContact && endCard,
-        colors: preview ? [] : colors,
-        logo,
-      });
+      if (signup) return onSignedUp?.(await api.signup({ ...input, ...login }));
+      const b = await api.saveBrand(input);
       setSaved(b);
       onSaved(b);
     } catch (e) {
@@ -177,7 +195,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
 
         {!saved && (
           <div className="mb-5 flex gap-1.5" role="tablist" aria-label="Setup steps">
-            {STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <button
                 key={s.title}
                 type="button"
@@ -201,14 +219,14 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
           <div>
             {!saved && (
               <div className="mono-num mb-1 text-[12px] text-[color:var(--text-3)]">
-                Step {step + 1} of {STEPS.length}
+                Step {step + 1} of {steps.length}
               </div>
             )}
             <h2 id="brand-title" className="text-[22px] font-semibold tracking-[-0.02em]">
-              {saved ? 'Your brand is ready' : STEPS[step].title}
+              {saved ? 'Your brand is ready' : steps[step].title}
             </h2>
             <p className="mt-1 text-[14px] leading-relaxed text-[color:var(--text-2)]">
-              {saved ? 'Every post now uses your products, colours and logo.' : STEPS[step].hint}
+              {saved ? 'Every post now uses your products, colours and logo.' : steps[step].hint}
             </p>
           </div>
           {!asPage && (
@@ -286,11 +304,11 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
             className="mt-6 space-y-5"
             onSubmit={(e) => {
               e.preventDefault();
-              if (last || brand) void save();
+              if (last || (brand && !signup)) void save();
               else next();
             }}
           >
-            {step === 0 && (
+            {key === 'business' && (
               <>
                 <label className="block">
                   <span className="sr-only">What does your business do?</span>
@@ -332,7 +350,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
               </>
             )}
 
-            {step === 1 && (
+            {key === 'products' && (
               <>
                 <div className="flex gap-2">
                   <input
@@ -389,7 +407,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
               </>
             )}
 
-            {step === 2 && (
+            {key === 'brand' && (
               <>
                 <label className="block">
                   <span className="mb-1.5 block text-[13px] font-medium">Business name</span>
@@ -456,7 +474,32 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
               </>
             )}
 
-            {step === 3 && (
+            {key === 'pay' && <Pay />}
+
+            {key === 'account' && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] font-medium">Mobile number</span>
+                    <input value={login.phone} onChange={(e) => setLogin({ ...login, phone: e.target.value })} type="tel" inputMode="tel" autoComplete="tel" placeholder="98765 43210" className={input} />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] font-medium">or Email</span>
+                    <input value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} type="email" autoComplete="email" placeholder="you@yourcompany.com" className={input} />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px] font-medium">Password</span>
+                  <input value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} type="password" autoComplete="new-password" placeholder="At least 6 characters" className={input} />
+                </label>
+                <div className="border-t border-white/[0.08] pt-5">
+                  <p className="text-[14px] font-medium">Contact details for your Diwali video</p>
+                  <p className="mt-0.5 text-[12.5px] text-[color:var(--text-3)]">Optional. Shown at the end of your video so customers can reach you.</p>
+                </div>
+              </>
+            )}
+
+            {(key === 'contact' || key === 'account') && (
               <>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {field('phone', 'Phone or WhatsApp', '+91 98765 43210', 'tel')}
@@ -478,17 +521,17 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
             )}
 
             <div className="flex gap-2">
-              {step > 0 && (
-                <button type="button" className="btn-quiet h-11 px-4" disabled={busy} onClick={() => (setError(null), setStep(step - 1))} aria-label="Back">
+              {(step > 0 || signup) && (
+                <button type="button" className="btn-quiet h-11 px-4" disabled={busy} onClick={() => (setError(null), step > 0 ? setStep(step - 1) : onClose())} aria-label="Back">
                   <ArrowLeft className="h-4 w-4" />
                 </button>
               )}
-              {last && !brand && (
+              {last && !brand && !signup && (
                 <button type="button" className="btn-quiet h-11 flex-1" disabled={busy} onClick={() => void save(false)}>
                   Skip
                 </button>
               )}
-              {brand && !last && (
+              {brand && !signup && !last && (
                 <button type="button" className="btn-quiet h-11 flex-1" disabled={busy} onClick={next}>
                   Next <ArrowRight className="h-4 w-4" />
                 </button>
@@ -496,12 +539,16 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
               <button type="submit" disabled={busy} className="btn-light h-11 flex-1">
                 {busy ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> {website.trim() ? 'Reading your logo and website…' : 'Reading your logo…'}
+                    <Loader2 className="h-4 w-4 animate-spin" /> {signup ? 'Creating your account…' : website.trim() ? 'Reading your logo and website…' : 'Reading your logo…'}
                   </>
-                ) : brand ? (
+                ) : brand && !signup ? (
                   'Save changes'
                 ) : last ? (
-                  'Finish'
+                  signup ? 'Create my account' : 'Finish'
+                ) : key === 'pay' ? (
+                  <>
+                    I’ve paid, continue <ArrowRight className="h-4 w-4" />
+                  </>
                 ) : (
                   <>
                     Continue <ArrowRight className="h-4 w-4" />
@@ -512,6 +559,39 @@ export function BrandSetup({ brand, onSaved, onClose, asPage }: Props) {
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+/** The payment step. The QR code and the automatic payment check are not ready yet: this shows where they go
+ *  and what happens next. Accounts are created as "payment pending" and an admin unlocks them. */
+function Pay() {
+  const wa = whatsappLink(`Hi, I paid for the ${OFFER.pack} but I'm stuck`);
+  return (
+    <div className="space-y-5">
+      <div className="mx-auto w-full max-w-[240px] rounded-3xl bg-white p-4 text-center text-black">
+        <div className="grid aspect-square place-items-center rounded-2xl border-2 border-dashed border-black/15 bg-black/[0.03]">
+          <div>
+            <QrCode className="mx-auto h-16 w-16 text-black/30" strokeWidth={1.25} />
+            <p className="mt-2 text-[12px] text-black/45">UPI QR code</p>
+          </div>
+        </div>
+        <p className="mt-3 text-[22px] font-semibold tracking-[-0.02em]">{rupees(priceNow())}</p>
+        <p className="text-[12px] text-black/55">{OFFER.pack} · Digiteq Solutions</p>
+      </div>
+      <div className="rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/[0.06]">
+        <p className="text-[13.5px] font-medium">What happens next</p>
+        <ol className="mt-2.5 space-y-2 text-[13.5px] leading-relaxed text-[color:var(--text-2)]">
+          <li className="flex gap-2.5"><span className="mono-num text-[color:var(--text)]">1</span>Scan the code with any UPI app and pay {rupees(priceNow())}.</li>
+          <li className="flex gap-2.5"><span className="mono-num text-[color:var(--text)]">2</span>Tap “I’ve paid” and create your login.</li>
+          <li className="flex gap-2.5"><span className="mono-num text-[color:var(--text)]">3</span>We confirm your payment and your {OFFER.pack} unlocks. You’ll see it in your account straight away.</li>
+        </ol>
+      </div>
+      {wa && (
+        <a href={wa} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 text-[13px] text-[color:var(--text-2)] hover:text-[color:var(--text)]">
+          <MessageCircle className="h-4 w-4" /> Paid but stuck? Message us on WhatsApp
+        </a>
+      )}
     </div>
   );
 }

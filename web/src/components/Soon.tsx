@@ -7,7 +7,7 @@ const PAGES = {
   editor: { icon: Scissors, name: 'The editor', detail: 'Trim, sequence and export your clips, all in the browser.' },
 };
 
-export function Soon({ page, onBack }: { page: Exclude<PageId, 'chat'>; onBack: () => void }) {
+export function Soon({ page, onBack }: { page: Exclude<PageId, 'chat' | 'customers'>; onBack: () => void }) {
   const p = PAGES[page];
   return (
     <section className="appear mx-auto flex h-full max-w-2xl flex-col items-center justify-center px-4 py-20 text-center">

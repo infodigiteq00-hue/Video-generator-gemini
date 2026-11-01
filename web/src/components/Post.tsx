@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, Download, Film, Image as ImageIcon, RotateCcw, Stamp, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, Download, Film, Image as ImageIcon, RotateCcw, Stamp, Trash2 } from 'lucide-react';
 import { formatElapsed } from '../format';
 import { isActiveStatus, type Job, type LogoPlace } from '../types';
 import { LogoEditor } from './LogoEditor';
@@ -11,8 +11,13 @@ interface Props {
   logoUrl: string | null;
   onPlaceLogo: (job: Job, place: LogoPlace | null) => Promise<void>;
   onRetry: () => void;
+  /** Customers' remaining new designs for this festival; null = no limit (admins) */
+  redosLeft: number | null;
+  onRedo: () => void;
   onMakeVideo: () => void;
   onDelete: () => void;
+  /** Back to the customer's pack (absent for admins) */
+  back?: { label: string; run: () => void };
 }
 
 function useElapsed(since: string, active: boolean) {
@@ -142,12 +147,17 @@ function Media({ job, label, logoUrl, onPlaceLogo }: { job: Job; label: string; 
   );
 }
 
-export function Post({ image, video, logoUrl, onPlaceLogo, onRetry, onMakeVideo, onDelete }: Props) {
+export function Post({ image, video, logoUrl, onPlaceLogo, onRetry, redosLeft, onRedo, onMakeVideo, onDelete, back }: Props) {
   // Until the image is in, there's nothing to look at: show the wait screen.
   if (isActiveStatus(image.status)) return <Waiting request={image.request ?? 'festival'} since={image.createdAt} image={image} video={video} />;
 
   return (
     <div className="mx-auto w-full max-w-3xl">
+      {back && (
+        <button className="btn-quiet mb-5 h-9" onClick={back.run}>
+          <ArrowLeft className="h-4 w-4" /> {back.label}
+        </button>
+      )}
       <div className="mb-6 text-center">
         <h1 className="text-[clamp(1.6rem,4vw,2.2rem)] font-semibold tracking-[-0.03em]">{image.title ?? image.request}</h1>
       </div>
@@ -179,10 +189,17 @@ export function Post({ image, video, logoUrl, onPlaceLogo, onRetry, onMakeVideo,
           Your video takes a minute or two. Please keep the app open.
         </p>
       )}
-      <div className="mt-10 text-center">
-        <button className="btn-quiet h-8 text-[12.5px] text-[color:var(--text-3)]" onClick={onDelete}>
-          <Trash2 className="h-3.5 w-3.5" /> Delete this post
-        </button>
+      <div className="mt-10 flex flex-col items-center gap-3">
+        {image.status === 'succeeded' && !(video && isActiveStatus(video.status)) && redosLeft !== 0 && (
+          <button className="btn-quiet h-10" onClick={onRedo}>
+            <RotateCcw className="h-4 w-4" /> Try a different design{redosLeft !== null && ` (${redosLeft} left)`}
+          </button>
+        )}
+        {redosLeft === null && (
+          <button className="btn-quiet h-8 text-[12.5px] text-[color:var(--text-3)]" onClick={onDelete}>
+            <Trash2 className="h-3.5 w-3.5" /> Delete this post
+          </button>
+        )}
       </div>
     </div>
   );

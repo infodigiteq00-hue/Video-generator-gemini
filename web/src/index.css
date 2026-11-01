@@ -196,7 +196,8 @@
   /* ---- Hero light ---- */
   .aurora {
     position: absolute;
-    inset: -25% -10% auto;
+    /* Never wider than its page: a wider glow lets phones scroll sideways when a field gets focus. */
+    inset: -25% 0 auto;
     height: 90vh;
     background:
       radial-gradient(38% 48% at 28% 42%, rgba(139, 123, 255, 0.3), transparent 70%),

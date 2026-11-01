@@ -4,8 +4,10 @@ import { api } from './api';
 import { APP_NAME } from './config';
 import { upcoming, when } from './festivals';
 import { useJobs } from './hooks/useJobs';
-import type { AppConfig, Brand, Job, LogoPlace, PageId, Provider } from './types';
+import type { AppConfig, Brand, Job, LogoPlace, PageId, Provider, User } from './types';
 import { BrandSetup } from './components/BrandSetup';
+import { Customers } from './components/Customers';
+import { PackHome } from './components/PackHome';
 import { FilmWall } from './components/FilmWall';
 import { Logo } from './components/Logo';
 import { Post, Waiting } from './components/Post';
@@ -13,29 +15,14 @@ import { Sidebar, type ChatSummary } from './components/Sidebar';
 import { Soon } from './components/Soon';
 
 const LEGACY = 'earlier';
-const BRAND_KEY = 'digiteq.brandId';
-const store = {
-  get: (k: string) => {
-    try {
-      return localStorage.getItem(k);
-    } catch {
-      return null;
-    }
-  },
-  set: (k: string, v: string) => {
-    try {
-      localStorage.setItem(k, v);
-    } catch {
-      /* private mode: brand just won't be remembered */
-    }
-  },
-};
 const newId = () => crypto.randomUUID();
 
 // Every post is a 9:16 reel: the image first, then an 8 second video made from it.
 const FORMAT = { aspectRatio: '9:16', imageSize: '2K', resolution: '720p', durationSeconds: 8 } as const;
 
-export default function App() {
+export default function App({ user }: { user: User }) {
+  const admin = user.role === 'admin';
+  const [paid, setPaid] = useState(user.paid);
   const [page, setPage] = useState<PageId>('chat');
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [offline, setOffline] = useState<string | null>(null);
@@ -58,17 +45,18 @@ export default function App() {
         setProvider(c.defaultProvider);
       })
       .catch((e: Error) => setOffline(e.message));
-    // This browser's brand, else the company already saved on the server: never ask twice.
-    const id = store.get(BRAND_KEY);
-    (id ? api.getBrand(id) : Promise.reject())
-      .catch(() => api.getBrand('current'))
-      .then((b) => {
-        setBrand(b);
-        store.set(BRAND_KEY, b.id);
-      })
-      .catch(() => {})
+    api
+      .getBrand('current')
+      .then(setBrand, () => {})
       .finally(() => setBrandLoaded(true));
   }, []);
+
+  // Until the payment is confirmed, check every 15 s so the pack unlocks on its own.
+  useEffect(() => {
+    if (paid) return;
+    const t = setInterval(() => void api.me().then((u) => u.paid && setPaid(true), () => {}), 15000);
+    return () => clearInterval(t);
+  }, [paid]);
 
   // One post per chat id: the brand image plus the video made from it.
   const posts: ChatSummary[] = useMemo(
@@ -90,7 +78,6 @@ export default function App() {
     setOffline(null);
     try {
       const job = await api.createBrandPost({
-        brandId: brand.id,
         chatId: chatId === LEGACY ? newId() : chatId,
         request: input.request ?? '',
         changeOf: input.changeOf,
@@ -105,6 +92,9 @@ export default function App() {
       setBusy(null);
     }
   }
+
+  // Designs made for a festival so far (failed ones don't count), for the pack's redo limit.
+  const designsMade = (festival: string) => jobs.filter((j) => j.kind === 'image' && j.request === festival && j.status !== 'failed').length;
 
   async function placeLogo(job: Job, place: LogoPlace | null) {
     try {
@@ -121,10 +111,7 @@ export default function App() {
         asPage
         brand={null}
         onClose={() => {}}
-        onSaved={(b) => {
-          setBrand(b);
-          store.set(BRAND_KEY, b.id);
-        }}
+        onSaved={setBrand}
       />
     );
   }
@@ -151,6 +138,7 @@ export default function App() {
           setMenuOpen(false);
         }}
         brand={brand}
+        admin={admin}
         onEditBrand={() => {
           setBrandOpen(true);
           setMenuOpen(false);
@@ -170,7 +158,11 @@ export default function App() {
           </button>
         </header>
 
-        {page !== 'chat' ? (
+        {page === 'customers' ? (
+          <div className="flex-1 overflow-y-auto">
+            <Customers />
+          </div>
+        ) : page !== 'chat' ? (
           <div className="flex-1 overflow-y-auto">
             <Soon page={page} onBack={() => setPage('chat')} />
           </div>
@@ -188,6 +180,9 @@ export default function App() {
               logoUrl={brand.logoUrl}
               onPlaceLogo={placeLogo}
               onRetry={() => void generate({ request: image.request ?? image.prompt })}
+              redosLeft={admin ? null : Math.max(0, (config?.pack.designs ?? 1) - designsMade(image.request ?? ''))}
+              onRedo={() => void generate({ request: image.request ?? '' })}
+              back={admin ? undefined : { label: `My ${config?.pack.name ?? 'pack'}`, run: () => open(newId()) }}
               onMakeVideo={() => void generate({ changeOf: image.id })}
               onDelete={async () => {
                 if (!confirm('Delete this post and its video? This can’t be undone.')) return;
@@ -195,6 +190,13 @@ export default function App() {
                 open(newId());
               }}
             />
+          </div>
+        ) : !admin ? (
+          <div className="relative isolate flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-8">
+            <div className="aurora -z-10" />
+            {config && (
+              <PackHome pack={config.pack} brand={brand} paid={paid} jobs={jobs} busy={Boolean(busy)} error={offline} onGenerate={(f) => void generate({ request: f })} onOpen={open} />
+            )}
           </div>
         ) : (
           <div className="relative isolate flex flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-10">
