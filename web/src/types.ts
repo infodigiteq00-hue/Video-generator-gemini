@@ -139,6 +139,8 @@ export interface Brand {
   /** Shown on the closing card of videos when `endCard` is on */
   contact?: Contact;
   endCard?: boolean;
+  /** Goes under the greeting and on the video's closing card */
+  tagline?: string;
 }
 
 export interface Contact {
@@ -158,6 +160,7 @@ export interface BrandInput {
   endCard: boolean;
   /** Picked by hand when there's no logo; otherwise read from the logo */
   colors: string[];
+  tagline: string;
   logo: File | null;
 }
 

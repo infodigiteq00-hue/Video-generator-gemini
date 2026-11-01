@@ -9,6 +9,7 @@ function brandForm(input: BrandInput) {
   fd.append('contact', JSON.stringify(input.contact));
   fd.append('endCard', String(input.endCard));
   fd.append('colors', JSON.stringify(input.colors));
+  fd.append('tagline', input.tagline);
   if (input.logo) fd.append('logo', input.logo, input.logo.name);
   return fd;
 }

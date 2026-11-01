@@ -96,8 +96,8 @@ app.post('/api/jobs', requireAdmin, upload.single('image'), (req, res) => {
 // ---- Brand kits ----
 
 const brandFields = (body) => {
-  const { name, industry, website, featured, contact, endCard, colors } = body;
-  return { name, industry, website, featured, contact, endCard, colors };
+  const { name, industry, website, featured, contact, endCard, colors, tagline } = body;
+  return { name, industry, website, featured, contact, endCard, colors, tagline };
 };
 
 // Each account has one brand: saving again updates it.

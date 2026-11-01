@@ -6,7 +6,7 @@ import path from 'node:path';
 import { omni } from './providers/omni.js';
 import { mock } from './providers/mock.js';
 import { mockImage, nanoBanana } from './providers/image.js';
-import { addEndCard, getBrand, hasContact, stampLogo, writeVideoPrompt } from './brand.js';
+import { addEndCard, defaultPlace, getBrand, hasContact, stampBrand, writeVideoPrompt } from './brand.js';
 import { DATA_DIR, OUTPUTS_DIR, UPLOADS_DIR } from './paths.js';
 import { adminId } from './auth.js';
 import { collection } from './db.js';
@@ -152,7 +152,32 @@ export function createJob({
   return job;
 }
 
-// The client placed (or removed) their logo: re-render from the logo-free original.
+// The post as shown and downloaded: the logo-free original plus the brand frame (the logo at `place` and the
+// contact bar). A new file name each time, so browsers never show a cached copy.
+async function framed(job, brand, place) {
+  let outputPath = job.cleanPath;
+  if (place || hasContact(brand)) {
+    const ext = job.kind === 'video' ? '.mp4' : path.extname(job.cleanPath) === '.png' ? '.png' : '.jpg';
+    outputPath = path.join(OUTPUTS_DIR, `${job.id}-logo-${Date.now()}${ext}`);
+    await stampBrand(job.cleanPath, outputPath, brand, place);
+  }
+  const url = `/media/videos/${path.basename(outputPath)}`;
+  return { outputPath, outputUrl: url, videoUrl: job.kind === 'video' ? url : job.videoUrl, logo: place };
+}
+
+// New brand posts arrive framed: the logo centred at the top and the contact bar. A frame that fails never fails the post.
+async function autoFrame(job) {
+  const brand = job.brandId && getBrand(job.brandId);
+  if (!brand) return {};
+  try {
+    return await framed(job, brand, brand.logoPath ? await defaultPlace(brand, job.cleanPath) : null);
+  } catch (err) {
+    console.error(`[job ${job.id}] brand frame failed:`, err.message);
+    return {};
+  }
+}
+
+// The client moved (or removed) their logo: re-render from the logo-free original.
 // `place` = { x, y, w } fractions of the frame, or null to remove the logo.
 export async function placeLogo(job, place) {
   const brand = job.brandId && getBrand(job.brandId);
@@ -163,15 +188,9 @@ export async function placeLogo(job, place) {
   if (place && !(ok(place.x, -0.5, 1) && ok(place.y, -0.5, 1) && ok(place.w, 0.02, 1))) throw new ValidationError('Invalid logo position');
 
   const old = job.outputPath !== job.cleanPath ? job.outputPath : null;
-  let outputPath = job.cleanPath;
-  if (place) {
-    const ext = job.kind === 'video' ? '.mp4' : path.extname(job.cleanPath) === '.png' ? '.png' : '.jpg';
-    outputPath = path.join(OUTPUTS_DIR, `${job.id}-logo-${Date.now()}${ext}`); // new name, so browsers don't show a cached copy
-    await stampLogo(job.cleanPath, outputPath, brand, place);
-  }
-  if (old) fs.rmSync(old, { force: true });
-  const url = `/media/videos/${path.basename(outputPath)}`;
-  update(job, { outputPath, outputUrl: url, videoUrl: job.kind === 'video' ? url : job.videoUrl, logo: place });
+  const fields = await framed(job, brand, place);
+  if (old && old !== fields.outputPath) fs.rmSync(old, { force: true });
+  update(job, fields);
   return job;
 }
 
@@ -213,7 +232,8 @@ async function runJob(job) {
         const outputPath = path.join(OUTPUTS_DIR, file);
         await provider.download(result.videoUri, outputPath, job);
         const url = `/media/videos/${file}`;
-        update(job, { status: 'succeeded', outputPath, cleanPath: outputPath, outputUrl: url, videoUrl: url });
+        const done = { status: 'succeeded', outputPath, cleanPath: outputPath, outputUrl: url, videoUrl: url };
+        update(job, { ...done, ...(await autoFrame({ ...job, ...done })) });
         return;
       }
       await new Promise((r) => setTimeout(r, POLL_MS));
@@ -260,7 +280,7 @@ async function runImageJob(job) {
       followUpError = `Couldn't start the video: ${err.message}`;
     }
   }
-  update(job, { ...done, followUpError });
+  update(job, { ...done, ...(await autoFrame({ ...job, ...done })), followUpError });
 }
 
 // Resume jobs that were in flight when the server stopped.

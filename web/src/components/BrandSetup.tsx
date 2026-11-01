@@ -23,7 +23,7 @@ const PRODUCTS = { key: 'products', title: 'What should we feature?', hint: 'Add
 const BRAND = { key: 'brand', title: 'Your name and logo', hint: 'Your name goes in the greeting. Upload your logo, or pick your brand colours if you don’t have one.' } as const;
 const STEPS: { key: StepKey; title: string; hint: string }[] = [
   BUSINESS, PRODUCTS, BRAND,
-  { key: 'contact', title: 'Contact details', hint: 'Optional. We add them to a closing card at the end of your videos, so customers know how to reach you.' },
+  { key: 'contact', title: 'Contact details', hint: 'Optional. We add them in a bar at the bottom of your posts and on a closing card at the end of your videos.' },
 ];
 const SIGNUP_STEPS: { key: StepKey; title: string; hint: string }[] = [
   BUSINESS, PRODUCTS, BRAND,
@@ -64,6 +64,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
   const [preview, setPreview] = useState<string | null>(brand?.logoUrl ?? null);
   const [contact, setContact] = useState<Contact>(brand?.contact ?? {});
   const [endCard, setEndCard] = useState(brand?.endCard ?? true);
+  const [tagline, setTagline] = useState(brand?.tagline ?? '');
   const [colors, setColors] = useState<string[]>(brand?.colors?.length ? brand.colors.slice(0, 3) : ['#d4a017', '#7a1f2b', '#ffffff']);
   const [saved, setSaved] = useState<Brand | null>(null);
   const [busy, setBusy] = useState(false);
@@ -139,6 +140,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
       industry: industry.trim(),
       website: website.trim(),
       featured: items,
+      tagline: tagline.trim(),
       contact: details,
       endCard: withContact && endCard,
       colors: preview ? [] : colors,
@@ -413,6 +415,12 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
                   <span className="mb-1.5 block text-[13px] font-medium">Business name</span>
                   <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus placeholder="Acme Prints" className={input} />
                 </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px] font-medium">
+                    Your tagline <span className="font-normal text-[color:var(--text-3)]">(optional, goes under the greeting)</span>
+                  </span>
+                  <input value={tagline} onChange={(e) => setTagline(e.target.value)} maxLength={100} placeholder="Precision is what we create. Trust is what we deliver." className={input} />
+                </label>
                 <div>
                   <span className="mb-1.5 block text-[13px] font-medium">
                     Your logo <span className="font-normal text-[color:var(--text-3)]">(optional)</span>
@@ -493,8 +501,8 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
                   <input value={login.password} onChange={(e) => setLogin({ ...login, password: e.target.value })} type="password" autoComplete="new-password" placeholder="At least 6 characters" className={input} />
                 </label>
                 <div className="border-t border-white/[0.08] pt-5">
-                  <p className="text-[14px] font-medium">Contact details for your Diwali video</p>
-                  <p className="mt-0.5 text-[12.5px] text-[color:var(--text-3)]">Optional. Shown at the end of your video so customers can reach you.</p>
+                  <p className="text-[14px] font-medium">Contact details for your posts</p>
+                  <p className="mt-0.5 text-[12.5px] text-[color:var(--text-3)]">Optional. Shown in a bar at the bottom of your posts and at the end of your video.</p>
                 </div>
               </>
             )}
@@ -509,7 +517,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
                 {field('address', 'Address', 'Shop 12, MG Road, Pune')}
                 <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/[0.04] px-4 py-3 ring-1 ring-white/[0.06]">
                   <input type="checkbox" checked={endCard} onChange={(e) => setEndCard(e.target.checked)} className="h-4 w-4 accent-[color:var(--violet)]" />
-                  <span className="text-[13.5px]">End my videos with these details</span>
+                  <span className="text-[13.5px]">Show these on my posts and videos</span>
                 </label>
               </>
             )}

@@ -83,13 +83,15 @@ function cleanColors(list) {
 
 // `logo` is { path, mimetype } of an uploaded file, or null to keep the current one (or for no logo).
 // Colours come from the logo; without one, from `colors` picked by hand.
-export async function saveBrand({ id, userId, name, industry, logo, website, featured, contact, endCard, colors }) {
+export async function saveBrand({ id, userId, name, industry, logo, website, featured, contact, endCard, colors, tagline }) {
   industry = (industry || '').trim();
   name = (name || '').trim();
   if (!name) throw new BrandError('Tell us your business name');
   if (!industry) throw new BrandError('Tell us what your business does');
   if (industry.length > 500) throw new BrandError('Keep the business description under 500 characters');
   featured = cleanFeatured(featured);
+  tagline = String(tagline || '').trim().replace(/\s+/g, ' ');
+  if (tagline.length > 100) throw new BrandError('Keep your tagline under 100 characters');
   contact = cleanContact(contact);
   const existing = id ? brands.get(id) : null;
   if (id && !existing) throw new BrandError('Brand not found');
@@ -108,7 +110,7 @@ export async function saveBrand({ id, userId, name, industry, logo, website, fea
     Object.assign(brand, { logoPath: logo.path, logoMime: logo.mimetype, logoUrl: `/media/uploads/${path.basename(logo.path)}` });
   }
   Object.assign(brand, {
-    name, industry, featured, contact,
+    name, industry, featured, contact, tagline,
     endCard: Object.keys(contact).length > 0 && endCard !== false && endCard !== 'false',
     updatedAt: new Date().toISOString(),
   });
@@ -214,28 +216,49 @@ export async function studyWebsite(brand, site) {
 
 // ---- Prompts ----
 
-// The image prompt, written straight from the client's details: warm and open, so the image model has room to design.
+// The image prompt, written straight from the client's details. It asks for an agency-style post where the
+// business's own world is the heart of the festival, in a fixed layout: a calm space at the top for the real
+// logo, an ornamental greeting with one line under it, and a clear band at the bottom for the contact bar
+// (the logo and the contact bar are added by ffmpeg afterwards, so they're always sharp and correct).
 export function imagePrompt(brand, festival) {
   const products = brand.featured?.length ? brand.featured.join(', ') : null;
   const site = brand.websiteProfile;
-  return (
-    `Imagine you are the owner of ${brand.name}, a business that does this: ${brand.industry}. ` +
-    `You are also a gifted designer who makes festival posts for businesses in your industry.\n\n` +
-    `Create a beautiful, aesthetic ${festival} post for ${brand.name}: a vertical 9:16 post for Instagram and WhatsApp.\n` +
-    (products
-      ? `Feature our products and services: ${products}. Use all of them, a few, or just one, whatever makes the most beautiful post. ` +
-        `Show them as they really look.\n`
-      : '') +
-    (brand.colors?.length ? `Use our brand colours ${brand.colors.join(', ')}, together with the festival's own colours.\n` : '') +
-    (site ? `About us, from our website: ${site.summary} Our visual style: ${site.visualStyle}\n` : '') +
-    `\nMake it feel happy, warm and neat, like a real designer made it, not AI. Fill it with the festivity of ${festival}: ` +
-    `its traditional decorations, lights, colours and celebration` +
-    (/diwali/i.test(festival) ? ' (diyas, rangoli, sparkles and fireworks)' : '') + '. ' +
-    `Use all of them or a few, whatever suits the design.\n` +
-    `Add the short ${festival} greeting people really use (like "Happy Diwali" or "Merry Christmas") with "${brand.name}", spelled exactly right. ` +
-    `No other text, no logos and no watermarks.` +
-    (brand.logoPath ? ' Keep the top-right corner clear: we add our real logo there.' : '')
-  );
+  const own = brand.name.endsWith('s') ? `${brand.name}’` : `${brand.name}’s`;
+  const lines = [
+    `You are the creative director of a top Indian advertising agency. Design a premium ${festival} greeting post for ${brand.name}, ` +
+      `a business that does this: ${brand.industry}.`,
+    products && `Their products and services: ${products}.`,
+    site && `About them: ${site.summary} Their visual style: ${site.visualStyle}`,
+    '',
+    `THE IDEA: make ${own} own world the heart of ${festival}, so the post could only belong to them. ` +
+      `Pick the one idea that suits this business and this festival best, for example:`,
+    '- their product, or the material it is made of, forms the festival art (steel parts arranged into a rangoli, pigment powder ' +
+      'sculpting the festival’s figures, fabric flowing into a diya’s flame);',
+    '- their product presented as the festival’s gift, beautifully lit in an open gift box among diyas and marigolds;',
+    '- their workplace (factory, shop, clinic, office or showroom) decorated and glowing for the festival, with people celebrating in front of it;',
+    '- the festival’s story or ritual told in their brand colours, with a clear nod to what they make.',
+    'Products always look exactly like the real thing: real shape, materials and finish.',
+    '',
+    `THE LOOK: photoreal and cinematic, rich in detail, with soft natural light: the quality of a national brand’s festive campaign. ` +
+      `Warm, joyful and full of ${festival}: its traditional decorations, lights and colours` +
+      (/diwali/i.test(festival) ? ' (diyas, rangoli, marigolds, fireworks)' : '') +
+      '. Elegant and uncluttered, with room to breathe.' +
+      (brand.colors?.length ? ` Brand colours ${brand.colors.join(', ')} lead the palette, in harmony with the festival’s colours.` : ''),
+    '',
+    'THE LAYOUT, a vertical 9:16 post:',
+    brand.logoPath
+      ? '- Top 12%: a clean, calm area in the centre. Our real logo goes there, so put nothing there.'
+      : `- Top: "${brand.name}" in refined lettering, centred.`,
+    `- The greeting people really use for ${festival} (like "Happy Diwali" or "Merry Christmas"): the first word small, in widely spaced ` +
+      'capitals, and the festival name large, ornamental and elegant, in the brand colours with a subtle metallic or glowing finish. ' +
+      `Place it where it balances the picture best: under the ${brand.logoPath ? 'logo area' : 'name'} or in the lower third.`,
+    brand.tagline
+      ? `- Under the greeting, in a small refined serif: "${brand.tagline}"`
+      : `- Under the greeting, one short warm line in a small refined serif that links ${festival} to what they do (at most 10 words).`,
+    hasContact(brand) && '- Bottom 8%: keep it plain and free of anything important. Our contact details bar goes there.',
+    '- Every word spelled perfectly. No other text, no logos, no watermarks.',
+  ];
+  return lines.filter((l) => l !== null && l !== undefined && l !== false).join('\n');
 }
 
 // After the image is made, the AI looks at it and says how it would turn it into a video. That answer is the video prompt.
@@ -244,16 +267,20 @@ export async function writeVideoPrompt(brand, festival, imagePath, seconds = 8) 
   const mimeType = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }[path.extname(imagePath)] || 'image/png';
   const { videoPrompt } = await askGemini({
     system:
-      'You are a video director who turns festival posts into short social media videos. ' +
-      'Write the prompt for an AI video model that animates the attached image.',
+      'You are the director of premium festive brand films for Indian businesses. ' +
+      'Write the prompt for an AI video model that brings the attached post to life.',
     parts: [
       {
         text:
-          `This is a ${festival} post for ${brand.name} (${brand.industry}). How would you turn it into a beautiful ${seconds} second video? ` +
-          'Describe the camera moves, what moves, glows and sparkles, how the scene comes alive, and the music and sounds that suit the festival. ' +
-          'Keep the products, the text and the layout exactly as in the image; the greeting stays sharp and never changes. No new text, no logos. ' +
+          `This is a ${festival} post for ${brand.name} (${brand.industry}). Turn it into an elegant ${seconds} second video, like a national ` +
+          'brand’s festive film. Motion is cinematic and purposeful, never chaotic: the scene comes alive (people move naturally, products ' +
+          'assemble or reveal themselves, a gift box opens, diyas flicker, petals and sparkles drift, fireworks bloom), with a slow, smooth ' +
+          'camera push-in. Build to a beautiful final moment that matches the post. ' +
+          'Describe the motion beat by beat, and the music and sounds that suit the festival and region. ' +
+          'Keep the greeting, the line under it and the layout perfectly still, sharp and unchanged the whole time. Keep the top centre and the ' +
+          'bottom band calm and empty (the logo and contact bar are added afterwards). Products keep their real shape. No new text, no logos. ' +
           (hasContact(brand) ? 'Let the music end softly on the last second. ' : '') +
-          'Write only the video prompt, one paragraph, under 120 words.',
+          'Write only the video prompt, one paragraph, under 130 words.',
       },
       { inlineData: { mimeType, data: fs.readFileSync(imagePath).toString('base64') } },
     ],
@@ -262,7 +289,7 @@ export async function writeVideoPrompt(brand, festival, imagePath, seconds = 8) 
   return videoPrompt;
 }
 
-// ---- Logo overlay ----
+// ---- Brand frame: logo, contact bar and end card (drawn by ffmpeg, so they're always sharp and exact) ----
 
 async function probe(file) {
   const { stdout } = await run('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,width,height,avg_frame_rate:format=duration', '-of', 'json', file]);
@@ -272,28 +299,16 @@ async function probe(file) {
   return { w: v.width, h: v.height, fps: n && d ? v.avg_frame_rate : '24', duration: Number(format.duration) || 0, audio: streams.some((s) => s.codec_type === 'audio') };
 }
 
-// Places the logo where the client put it: `place` = { x, y, w } as fractions of the frame
-// (top-left corner and width; height follows the logo's shape). Works for images and MP4s.
-export async function stampLogo(input, output, brand, place) {
-  const { w, h } = await probe(input);
-  const lw = Math.max(2, Math.round(w * place.w / 2) * 2);
-  const filter = `[1:v]scale=${lw}:-2[logo];[0:v][logo]overlay=${Math.round(w * place.x)}:${Math.round(h * place.y)}`;
-  const video = output.endsWith('.mp4');
-  const codec = video
-    ? ['-c:v', 'libx264', '-crf', '18', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart']
-    : ['-frames:v', '1', '-q:v', '2'];
-  await run('ffmpeg', ['-y', '-v', 'error', '-i', input, '-i', brand.logoPath, '-filter_complex', filter, ...codec, output]);
-}
-
-// ---- End card (contact details after the video) ----
-
-const CARD_SECONDS = 3;
-const CROSSFADE = 0.6;
 const FONTS = {
   bold: ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', '/Library/Fonts/Arial Unicode.ttf'],
   regular: ['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/Library/Fonts/Arial Unicode.ttf'],
+  serif: ['/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/Library/Fonts/Arial Unicode.ttf'],
 };
-const font = (kind) => FONTS[kind].find((f) => fs.existsSync(f));
+function font(kind) {
+  const f = FONTS[kind].find((p) => fs.existsSync(p));
+  if (!f) throw new Error('No font available for the brand frame');
+  return f;
+}
 const even = (n) => Math.max(2, Math.round(n / 2) * 2);
 
 function wrap(text, max) {
@@ -306,107 +321,144 @@ function wrap(text, max) {
   return line ? [...lines, line] : lines;
 }
 
-// A brand colour bright enough to read on the dark card, else soft white.
-function accent(colors = []) {
-  for (const c of colors) {
-    const m = /^#?([0-9a-f]{6})$/i.exec(c.trim());
-    if (!m) continue;
-    const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
-    if (0.2126 * r + 0.7152 * g + 0.0722 * b > 0.35) return `0x${m[1]}`;
-  }
-  return 'white@0.75';
+const rgb = (hex) => [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const lum = ([r, g, b]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+const toHex = (c) => `0x${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+
+// The darkest brand colour, darkened further if needed, so white text on it is easy to read.
+function darkBrand(colors = []) {
+  const list = colors.map((c) => /^#?([0-9a-f]{6})$/i.exec(c.trim())?.[1]).filter(Boolean).map(rgb);
+  if (!list.length) return '0x1d1d1f';
+  let c = list.sort((a, b) => lum(a) - lum(b))[0];
+  while (lum(c) > 0.32) c = c.map((v) => v * 0.8);
+  return toHex(c);
 }
 
-// Appends a closing card to `input`: the last frame blurred and dimmed, the logo on a white plate, the business
-// name and the contact details, faded in from the video. Text is drawn by ffmpeg, so numbers are always exact.
+// Draws text from a file (no escaping problems with addresses or symbols); `top` may be an expression.
+function text(tmp, key, value, { fontfile, size, color, top, alpha }) {
+  const file = path.join(tmp, `${key}.txt`);
+  fs.writeFileSync(file, value);
+  return (
+    `drawtext=fontfile='${fontfile}':textfile='${file}':expansion=none:fontsize=${size}:fontcolor=${color}` +
+    `:x=(w-text_w)/2:y=${top}` + (alpha ? `:alpha='${alpha}'` : '')
+  );
+}
+
+// The default logo spot: centred in the calm area the image prompt leaves at the top.
+export async function defaultPlace(brand, input) {
+  const v = await probe(input);
+  const l = await probe(brand.logoPath);
+  const w = Math.min(0.34, ((0.075 * v.h) / v.w) * (l.w / l.h));
+  return { x: +((1 - w) / 2).toFixed(4), y: 0.03, w: +w.toFixed(4) };
+}
+
+// Two balanced rows for the contact bar: phone and email, then website and address.
+const contactRows = (c = {}) =>
+  [[c.phone, c.email], [c.website?.replace(/^https?:\/\//i, '').replace(/\/$/, ''), c.address]]
+    .map((r) => r.filter(Boolean).join('   ·   '))
+    .filter(Boolean);
+
+// The brand frame on an image or an MP4: the logo at `place` ({ x, y, w } fractions of the frame; null = no logo)
+// and, when the client wants their contact details shown, a bar across the bottom in their darkest brand colour.
+export async function stampBrand(input, output, brand, place) {
+  const { w, h } = await probe(input);
+  const args = ['-y', '-v', 'error', '-i', input];
+  // Always opaque, so a PNG with transparency can't make the bar look washed out.
+  const chain = ['[0:v]format=rgb24[base]'];
+  let last = 'base';
+  if (place && brand.logoPath) {
+    args.push('-i', brand.logoPath);
+    chain.push(`[1:v]scale=${even(w * place.w)}:-2[logo]`, `[base][logo]overlay=${Math.round(w * place.x)}:${Math.round(h * place.y)}[l]`);
+    last = 'l';
+  }
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'frame-'));
+  try {
+    if (hasContact(brand)) {
+      const band = even(h * 0.075);
+      const rows = contactRows(brand.contact);
+      // One font size that keeps the longest row on one line.
+      const size = Math.round(Math.min(band * 0.25, ...rows.map((r) => (w * 0.92) / (r.length * 0.55))));
+      const step = Math.round(size * 1.5);
+      const first = Math.round(h - band + (band - (rows.length - 1) * step - size) / 2);
+      const draws = rows.map((r, i) => text(tmp, `row${i}`, r, { fontfile: font('regular'), size, color: 'white', top: first + i * step }));
+      chain.push(`[${last}]drawbox=x=0:y=${h - band}:w=iw:h=${band}:color=${darkBrand(brand.colors)}:t=fill,${draws.join(',')}[f]`);
+      last = 'f';
+    }
+    if (last === 'base') return fs.copyFileSync(input, output);
+    const video = output.endsWith('.mp4');
+    const codec = video
+      ? ['-map', '0:a?', '-c:v', 'libx264', '-crf', '18', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart']
+      : ['-frames:v', '1', '-q:v', '2'];
+    await run('ffmpeg', [...args, '-filter_complex', chain.join(';'), '-map', `[${last}]`, ...codec, output]);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// ---- End card (after the video) ----
+
+const CARD_SECONDS = 3;
+const CROSSFADE = 0.6;
+
+// Appends a clean white closing card to `input`: the logo (or the business name), the tagline, and the contact
+// details, faded in from the video.
 export async function addEndCard(input, output, brand) {
   const c = brand.contact ?? {};
-  const fontBold = font('bold');
-  const fontRegular = font('regular');
-  if (!fontBold || !fontRegular) throw new Error('No font available for the end card');
   const v = await probe(input);
   const { w: W, h: H, fps } = v;
   const S = Math.min(W, H);
   const portrait = H > W;
+  const dark = darkBrand(brand.colors);
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'endcard-'));
   try {
-    // Logo on a rounded white plate, so dark and transparent logos both read. Without a logo the plate is a
-    // transparent pixel, so the rest of the card stays the same.
-    const plate = path.join(tmp, 'plate.png');
-    let ph = 0;
+    const args = ['-y', '-v', 'error', '-i', input, '-f', 'lavfi', '-i', `color=c=0xFBFAF7:s=${W}x${H}:r=${fps}:d=${CARD_SECONDS}`];
+    const gap = S * 0.045;
+    let lh = 0;
+    let lw = 0;
     if (brand.logoPath) {
-      const logo = await probe(brand.logoPath);
-      const maxW = portrait ? W * 0.5 : W * 0.26;
-      const maxH = S * 0.2;
-      const k = Math.min(maxW / logo.w, maxH / logo.h);
-      const lw = even(logo.w * k);
-      const lh = even(logo.h * k);
-      const pad = even(S * 0.04);
-      const pw = lw + 2 * pad;
-      ph = lh + 2 * pad;
-      const r = Math.round(Math.min(ph, pw) * 0.18);
-      const round = `if(gt(abs(X-W/2),W/2-${r})*gt(abs(Y-H/2),H/2-${r}),if(lte(hypot(abs(X-W/2)-(W/2-${r}),abs(Y-H/2)-(H/2-${r})),${r}),255,0),255)`;
-      await run('ffmpeg', [
-        '-y', '-v', 'error', '-f', 'lavfi', '-i', `color=c=white:s=${pw}x${ph}`, '-i', brand.logoPath, '-filter_complex',
-        `[1:v]scale=${lw}:${lh}[l];[0:v][l]overlay=${pad}:${pad},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='${round}'`,
-        '-frames:v', '1', plate,
-      ]);
-    } else {
-      await run('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=black@0:s=2x2,format=rgba', '-frames:v', '1', plate]);
+      const l = await probe(brand.logoPath);
+      const k = Math.min((portrait ? W * 0.62 : W * 0.32) / l.w, (S * 0.26) / l.h);
+      [lw, lh] = [even(l.w * k), even(l.h * k)];
+      args.push('-loop', '1', '-framerate', String(fps), '-t', String(CARD_SECONDS), '-i', brand.logoPath);
     }
-    const last = path.join(tmp, 'last.png');
-    await run('ffmpeg', ['-y', '-v', 'error', '-sseof', '-0.25', '-i', input, '-frames:v', '1', '-update', '1', last]);
 
-    // Text lines, laid out top to bottom and centred as one block.
-    const nameSize = Math.round(Math.min(S * 0.066, (W * 0.86) / (brand.name.length * 0.62)));
-    const lineSize = Math.round(S * (portrait ? 0.042 : 0.038));
-    const maxChars = Math.floor((W * 0.84) / (lineSize * 0.58));
+    // Lines from top to bottom, then centred as one block.
+    const size = Math.round(S * (portrait ? 0.038 : 0.034));
+    const max = Math.floor((W * 0.84) / (size * 0.58));
+    const rows = [];
+    if (!brand.logoPath) rows.push({ t: brand.name, f: 'bold', s: Math.round(Math.min(S * 0.075, (W * 0.86) / (brand.name.length * 0.62))), c: dark, after: gap });
+    for (const t of brand.tagline ? wrap(brand.tagline, Math.floor(max * 0.95)) : []) rows.push({ t, f: 'serif', s: Math.round(size * 1.05), c: '0x3a3a3c' });
+    if (rows.length) rows[rows.length - 1].after = gap;
     const site = c.website?.replace(/^https?:\/\//i, '').replace(/\/$/, '');
-    const lines = [c.phone, c.email, site, ...(c.address ? wrap(c.address, maxChars) : [])].filter(Boolean);
-    const gap = S * 0.05;
-    const capSize = Math.round(S * 0.024);
-    const lineStep = lineSize * 1.6;
-    const block = (ph && ph + gap) + nameSize + gap * 0.7 + 3 + gap * 0.7 + capSize + gap * 0.55 + lines.length * lineStep;
-    let y = Math.max(S * 0.04, (H - block) / 2);
-    const plateY = Math.round(y);
-    y += ph && ph + gap;
+    if (site) rows.push({ t: site, f: 'bold', s: Math.round(size * 1.1), c: dark });
+    for (const t of [c.email, c.phone, ...(c.address ? wrap(c.address, max) : [])].filter(Boolean)) rows.push({ t, f: 'regular', s: size, c: '0x2c2c2e' });
 
-    const files = {};
-    const text = (key, value) => fs.writeFileSync((files[key] = path.join(tmp, `${key}.txt`)), value);
-    // Each element fades in and rises a little, one after another.
-    const draw = (key, fontfile, size, color, top, delay) =>
-      `drawtext=fontfile='${fontfile}':textfile='${files[key]}':expansion=none:fontsize=${size}:fontcolor=${color}` +
-      `:x=(w-text_w)/2:y=${Math.round(top)}+${Math.round(S * 0.02)}*(1-min(1\\,max(0\\,(t-${delay})/0.5)))` +
-      `:alpha='min(1\\,max(0\\,(t-${delay})/0.5))'`;
-    text('name', brand.name);
-    const parts = [draw('name', fontBold, nameSize, 'white', y, 0.35)];
-    y += nameSize + gap * 0.7;
-    const dw = Math.round(S * 0.1);
-    parts.push(`drawbox=x=${Math.round((W - dw) / 2)}:y=${Math.round(y)}:w=${dw}:h=3:color=${accent(brand.colors)}:t=fill:enable='gte(t,0.5)'`);
-    y += 3 + gap * 0.7;
-    text('cap', 'G E T   I N   T O U C H');
-    parts.push(draw('cap', fontBold, capSize, 'white@0.6', y, 0.5));
-    y += capSize + gap * 0.55;
-    lines.forEach((line, i) => {
-      text(`l${i}`, line);
-      parts.push(draw(`l${i}`, fontRegular, lineSize, 'white@0.92', y, 0.6 + i * 0.12));
-      y += lineStep;
+    const height = (lh ? lh + gap * 1.2 : 0) + rows.reduce((sum, r) => sum + r.s * 1.55 + (r.after ?? 0), 0);
+    let y = Math.max(S * 0.05, (H - height) / 2);
+    const logoY = Math.round(y);
+    if (lh) y += lh + gap * 1.2;
+    // Each line fades in and rises a little, one after another.
+    const draws = rows.map((r, i) => {
+      const delay = (0.35 + i * 0.08).toFixed(2);
+      const a = `min(1\\,max(0\\,(t-${delay})/0.5))`;
+      const top = `${Math.round(y)}+${Math.round(S * 0.015)}*(1-${a})`;
+      y += r.s * 1.55 + (r.after ?? 0);
+      return text(tmp, `l${i}`, r.t, { fontfile: font(r.f), size: r.s, color: r.c, top, alpha: a });
     });
 
     const D = v.duration;
     const total = D - CROSSFADE + CARD_SECONDS;
+    const card = lh
+      ? `[2:v]scale=${lw}:${lh},format=rgba,fade=t=in:st=0.1:d=0.5:alpha=1[logo];[1:v][logo]overlay=x=(W-w)/2:y=${logoY}:shortest=1`
+      : '[1:v]null';
     const filter = [
-      `[1:v]scale=${W}:${H},setsar=1,gblur=sigma=${Math.round(S * 0.04)},eq=brightness=-0.1:saturation=0.9,drawbox=x=0:y=0:w=iw:h=ih:color=black@0.5:t=fill[bg]`,
-      `[2:v]format=rgba,fade=t=in:st=0.15:d=0.5:alpha=1[pl]`,
-      `[bg][pl]overlay=x=(W-w)/2:y=${plateY}:shortest=1,${parts.join(',')},fps=${fps},format=yuv420p[card]`,
+      `${card}${draws.length ? ',' + draws.join(',') : ''},fps=${fps},format=yuv420p,setsar=1[card]`,
       `[0:v]fps=${fps},setsar=1,format=yuv420p[main]`,
       `[main][card]xfade=transition=fade:duration=${CROSSFADE}:offset=${(D - CROSSFADE).toFixed(3)}[v]`,
       ...(v.audio ? [`[0:a]afade=t=out:st=${Math.max(0, D - 0.8).toFixed(3)}:d=0.8,apad=whole_dur=${total.toFixed(3)}[a]`] : []),
     ].join(';');
-    const still = ['-loop', '1', '-framerate', String(fps), '-t', String(CARD_SECONDS)];
     await run('ffmpeg', [
-      '-y', '-v', 'error', '-i', input, ...still, '-i', last, ...still, '-i', plate, '-filter_complex', filter,
-      '-map', '[v]', ...(v.audio ? ['-map', '[a]', '-c:a', 'aac', '-b:a', '192k'] : []),
+      ...args, '-filter_complex', filter, '-map', '[v]', ...(v.audio ? ['-map', '[a]', '-c:a', 'aac', '-b:a', '192k'] : []),
       '-c:v', 'libx264', '-crf', '18', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', output,
     ]);
   } finally {

@@ -8,13 +8,14 @@ interface Props {
   onChange: (p: LogoPlace) => void;
 }
 
-const DEFAULT: LogoPlace = { x: 0.72, y: 0.04, w: 0.24 };
+// Centred at the top, where the posts leave room for the logo.
+export const DEFAULT_LOGO: LogoPlace = { x: 0.33, y: 0.03, w: 0.34 };
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** Drag the logo to move it, drag the corner handle to resize. Positions are fractions of the frame. */
 export function LogoEditor({ logoUrl, initial, onChange }: Props) {
   const box = useRef<HTMLDivElement>(null);
-  const [place, setPlace] = useState<LogoPlace>(initial ?? DEFAULT);
+  const [place, setPlace] = useState<LogoPlace>(initial ?? DEFAULT_LOGO);
   const [ratio, setRatio] = useState(0.4); // logo height / width, set when the image loads
   const drag = useRef<{ mode: 'move' | 'resize'; dx: number; dy: number } | null>(null);
 

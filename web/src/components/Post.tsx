@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, ArrowLeft, Check, Download, Film, Image as ImageIcon, RotateCcw, Stamp, Trash2 } from 'lucide-react';
 import { formatElapsed } from '../format';
 import { isActiveStatus, type Job, type LogoPlace } from '../types';
-import { LogoEditor } from './LogoEditor';
+import { DEFAULT_LOGO, LogoEditor } from './LogoEditor';
 
 interface Props {
   /** The brand post (image) and the video made from it, if started. */
@@ -118,7 +118,7 @@ function Media({ job, label, logoUrl, onPlaceLogo }: { job: Job; label: string; 
         <div className="mt-3 flex flex-wrap gap-2">
           {editing ? (
             <>
-              <button className="btn-light h-9" disabled={saving} onClick={() => void save(place ?? job.logo ?? { x: 0.72, y: 0.04, w: 0.24 })}>
+              <button className="btn-light h-9" disabled={saving} onClick={() => void save(place ?? job.logo ?? DEFAULT_LOGO)}>
                 <Check className="h-4 w-4" /> {saving ? 'Applying…' : 'Apply logo'}
               </button>
               <button className="btn-quiet h-9" disabled={saving} onClick={() => void save(null)}>

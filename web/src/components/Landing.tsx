@@ -21,13 +21,84 @@ const PACK = [
 
 const BUSINESSES = ['Jewellers', 'Sweet shops', 'Manufacturers', 'Clinics', 'Boutiques', 'Restaurants', 'Builders', 'Electronics', 'Coaching classes', 'CA firms', 'Salons', 'Traders'];
 
+// Posts and videos made for our clients. `video` plays while it's on screen.
 const SAMPLES = [
-  { src: '/samples/diwali-tinita.webp', label: 'Diwali · Industrial equipment' },
-  { src: '/samples/diwali-mahahal.webp', label: 'Diwali · Engineering' },
-  { src: '/samples/durga-puja.webp', label: 'Durga Puja · Engineering' },
-  { src: '/samples/janmashtami.webp', label: 'Janmashtami · Engineering' },
-  { src: '/samples/holi.webp', label: 'Holi · Manufacturing' },
+  { video: '/samples/diwali-tinita.mp4', poster: '/samples/diwali-tinita.webp', label: 'Diwali · Heat exchangers' },
+  { video: '/samples/diwali-steelcon.mp4', poster: '/samples/diwali-steelcon.webp', label: 'Diwali · Steel components' },
+  { video: '/samples/diwali-subhasri.mp4', poster: '/samples/diwali-subhasri.webp', label: 'Diwali · Pigments' },
+  { video: null, poster: '/samples/bhai-dooj-subhasri.webp', label: 'Bhai Dooj · Pigments' },
+  { video: '/samples/dussehra-subhasri.mp4', poster: '/samples/dussehra-subhasri.webp', label: 'Dussehra · Pigments' },
+  { video: '/samples/navratri-subhasri.mp4', poster: '/samples/navratri-subhasri.webp', label: 'Navratri · Pigments' },
 ];
+
+// Each sample's position in the hero fan, by its distance from the centre (others wait hidden behind).
+const FAN: Record<number, string> = {
+  [-1]: 'z-20 opacity-100 [transform:translate(-112%,8%)_rotate(-9deg)_scale(0.88)]',
+  0: 'z-30 opacity-100 [transform:translate(-50%,0)]',
+  1: 'z-20 opacity-100 [transform:translate(12%,8%)_rotate(9deg)_scale(0.88)]',
+};
+const HIDDEN = 'z-10 opacity-0 [transform:translate(-50%,10%)_scale(0.7)]';
+const FAN_VIDEOS = SAMPLES.filter((s) => s.video);
+
+/** The hero's fanned posts: the centre video plays, and when it ends the next one swings into the middle. */
+function HeroFan() {
+  const [i, setI] = useState(0);
+  const n = FAN_VIDEOS.length;
+  const next = () => setI((x) => (x + 1) % n);
+  // If a phone blocks autoplay, still move on now and then.
+  useEffect(() => {
+    const t = setTimeout(next, 16000);
+    return () => clearTimeout(t);
+  }, [i]);
+  return (
+    <>
+      {FAN_VIDEOS.map((s, k) => {
+        const d = ((k - i + n + 1) % n) - 1; // -1 left, 0 centre, 1 right
+        const centre = d === 0;
+        return (
+          <button
+            key={s.poster}
+            type="button"
+            tabIndex={centre ? -1 : 0}
+            aria-label={centre ? s.label : `Show ${s.label}`}
+            onClick={() => !centre && setI(k)}
+            className={`absolute left-1/2 top-0 w-[50%] overflow-hidden rounded-2xl transition-[transform,opacity] duration-700 [transition-timing-function:var(--spring)] ${FAN[d] ?? HIDDEN} ${
+              centre ? 'cursor-default shadow-[0_30px_80px_-20px_rgba(255,140,60,0.55)] ring-1 ring-[#ffb347]/40' : 'shadow-2xl ring-1 ring-white/10'
+            }`}
+          >
+            <img src={s.poster} alt={s.label} className="block aspect-[9/16] w-full object-cover" />
+            {centre && (
+              <>
+                <video key={i} src={s.video!} poster={s.poster} autoPlay muted playsInline onEnded={next} className="absolute inset-0 h-full w-full object-cover" />
+                <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider backdrop-blur">
+                  <Film className="h-3 w-3" /> Video
+                </span>
+              </>
+            )}
+          </button>
+        );
+      })}
+      <div className="absolute inset-x-0 bottom-0 flex justify-center gap-1.5" aria-hidden>
+        {FAN_VIDEOS.map((s, k) => (
+          <span key={s.poster} className={`h-1.5 rounded-full transition-all duration-500 ${k === i ? 'w-5 bg-[#ffb347]' : 'w-1.5 bg-white/25'}`} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** A muted looping video that only loads and plays while it's on screen. */
+function InView({ src, poster, className }: { src: string; poster: string; className: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const io = new IntersectionObserver(([e]) => (e.isIntersecting ? void v.play().catch(() => {}) : v.pause()), { threshold: 0.4 });
+    io.observe(v);
+    return () => io.disconnect();
+  }, []);
+  return <video ref={ref} src={src} poster={poster} muted loop playsInline preload="none" className={className} />;
+}
 
 const FAQ = [
   ['Do I need a designer or any design skills?', 'No. Answer three questions about your business, upload your logo, and tap Generate on each festival. That’s it.'],
@@ -56,10 +127,10 @@ function left(to: string, now: number) {
 const pad = (n: number) => String(n).padStart(2, '0');
 const dateLabel = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
-function Countdown({ to, now }: { to: string; now: number }) {
+function Countdown({ to, now, className = 'justify-center' }: { to: string; now: number; className?: string }) {
   const t = left(to, now);
   return (
-    <div className="flex items-center justify-center gap-1.5" aria-label={`${t.d} days ${t.h} hours ${t.m} minutes left`}>
+    <div className={`flex items-center gap-1.5 ${className}`} aria-label={`${t.d} days ${t.h} hours ${t.m} minutes left`}>
       {(
         [
           [t.d, 'days'],
@@ -90,7 +161,7 @@ function Cta({ children, className = '' }: { children: React.ReactNode; classNam
 
 function Section({ kicker, title, children, id }: { kicker?: string; title: React.ReactNode; children: React.ReactNode; id?: string }) {
   return (
-    <section id={id} className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 sm:py-24">
+    <section id={id} className="mx-auto w-full max-w-6xl scroll-mt-14 px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
       {kicker && <p className="mb-3 text-center text-[12.5px] font-semibold uppercase tracking-[0.16em] text-[#ffb347]">{kicker}</p>}
       <h2 className="mx-auto max-w-2xl text-balance text-center text-[clamp(1.75rem,6vw,2.75rem)] font-semibold leading-[1.08] tracking-[-0.035em]">{title}</h2>
       <div className="mt-10">{children}</div>
@@ -130,43 +201,54 @@ export function Landing() {
     <div className="h-full overflow-y-auto overflow-x-hidden overscroll-contain bg-[color:var(--bg)]">
       {/* ---- Header ---- */}
       <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[rgba(5,5,6,0.75)] backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-2.5 px-4 sm:px-6">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2.5 px-4 sm:px-6 lg:h-16 lg:px-8">
           <Logo size={24} />
           <span className="text-[14.5px] font-semibold tracking-[-0.01em]">{APP_NAME}</span>
+          <nav className="ml-8 hidden items-center gap-6 text-[14px] text-[color:var(--text-2)] lg:flex">
+            {[
+              ['#pack', 'The pack'],
+              ['#how', 'How it works'],
+              ['#price', 'Pricing'],
+              ['#faq', 'FAQ'],
+            ].map(([href, label]) => (
+              <a key={href} href={href} className="hover:text-[color:var(--text)]">
+                {label}
+              </a>
+            ))}
+          </nav>
           <button className="btn-quiet ml-auto h-9" onClick={() => go('/login')}>
             Log in
           </button>
+          <Cta className="hidden h-10 px-5 text-[14px] shadow-none md:inline-flex">
+            Get my {OFFER.pack} · {rupees(price)}
+          </Cta>
         </div>
       </header>
 
       {/* ---- Hero ---- */}
       <section className="relative isolate overflow-hidden">
         <div className="pointer-events-none absolute inset-x-0 top-[-20%] -z-10 h-[680px] bg-[radial-gradient(60%_50%_at_50%_30%,rgba(255,150,60,0.28),transparent_70%)]" />
-        <div className="mx-auto max-w-5xl px-4 pb-14 pt-10 text-center sm:px-6 sm:pt-16">
+        {/* Phones: one column. Desktop: the pitch and the price on the left, the posts on the right. */}
+        <div className="mx-auto grid max-w-6xl px-4 pb-14 pt-10 text-center sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-x-12 lg:px-8 lg:pb-24 lg:pt-20 lg:text-left">
+          <div className="lg:col-start-1 lg:row-start-1 lg:self-end">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ffb347]/10 px-3 py-1.5 text-[12.5px] font-medium text-[#ffc56e] ring-1 ring-[#ffb347]/25">
             <Sparkles className="h-3.5 w-3.5" /> Diwali {diwali ? new Date(diwali.date).getFullYear() : ''} · {launch ? 'Launch offer' : OFFER.pack}
           </span>
-          <h1 className="mx-auto mt-5 max-w-3xl text-balance text-[clamp(2.4rem,10vw,4.6rem)] font-semibold leading-[1.02] tracking-[-0.045em]">
+          <h1 className="mx-auto mt-5 max-w-3xl text-balance text-[clamp(2.4rem,10vw,4.6rem)] lg:mx-0 lg:text-[clamp(3.4rem,5.2vw,4.9rem)] font-semibold leading-[1.02] tracking-[-0.045em]">
             Your Diwali posts, designed for <span className="serif bg-[linear-gradient(135deg,#ffd27a,#ff8a3d)] bg-clip-text pr-[0.08em] font-normal text-transparent">your business.</span>
           </h1>
-          <p className="mx-auto mt-5 max-w-xl text-[16.5px] leading-relaxed text-[color:var(--text-2)]">
+          <p className="mx-auto mt-5 max-w-xl text-[16.5px] leading-relaxed text-[color:var(--text-2)] lg:mx-0 lg:text-[18px]">
             Tell us what you sell. Our AI designs {PACK.length} festival posts and a Diwali video with <b className="font-medium text-[color:var(--text)]">your products</b>,{' '}
             <b className="font-medium text-[color:var(--text)]">your colours</b> and <b className="font-medium text-[color:var(--text)]">your logo</b>. Ready for WhatsApp and Instagram in minutes.
           </p>
-
-          {/* Fanned samples: two posts and the video in front. */}
-          <div className="relative mx-auto mt-10 h-[340px] max-w-[420px] sm:h-[420px]">
-            <img src="/samples/diwali-mahahal.webp" alt="Diwali post for an engineering company" className="absolute left-0 top-8 w-[44%] -rotate-[9deg] rounded-2xl shadow-2xl ring-1 ring-white/10" />
-            <img src="/samples/janmashtami.webp" alt="Janmashtami post for an engineering company" className="absolute right-0 top-8 w-[44%] rotate-[9deg] rounded-2xl shadow-2xl ring-1 ring-white/10" />
-            <div className="absolute left-1/2 top-0 w-[50%] -translate-x-1/2 overflow-hidden rounded-2xl shadow-[0_30px_80px_-20px_rgba(255,140,60,0.55)] ring-1 ring-[#ffb347]/40">
-              <video src="/samples/diwali.mp4" poster="/samples/diwali-poster.webp" autoPlay muted loop playsInline className="block aspect-[9/16] w-full object-cover" />
-              <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider backdrop-blur">
-                <Film className="h-3 w-3" /> Video
-              </span>
-            </div>
           </div>
 
-          <div ref={hero} className="mt-10 flex flex-col items-center">
+          <div className="relative mx-auto mt-10 h-[340px] w-full max-w-[420px] sm:h-[420px] lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0 lg:h-[600px] lg:max-w-[540px]">
+            <HeroFan />
+          </div>
+
+          <div className="lg:col-start-1 lg:row-start-2 lg:self-start">
+          <div ref={hero} className="mt-10 flex flex-col items-center lg:mt-8 lg:items-start">
             <div className="flex items-baseline gap-3">
               <span className="text-[44px] font-semibold tracking-[-0.04em]">{rupees(price)}</span>
               {launch && <span className="text-[20px] text-[color:var(--text-3)] line-through">{rupees(OFFER.regularPrice)}</span>}
@@ -175,19 +257,20 @@ export function Landing() {
             <Cta className="mt-4 w-full max-w-sm">
               Get my {OFFER.pack} <ArrowRight className="h-5 w-5" />
             </Cta>
-            <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12.5px] text-[color:var(--text-3)]">
+            <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 lg:justify-start gap-y-1 text-[12.5px] text-[color:var(--text-3)]">
               <span>Pay by UPI</span>·<span>Ready in minutes</span>·<span>No designer needed</span>
             </p>
           </div>
 
           {diwali && (
-            <div className="mx-auto mt-10 max-w-sm rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/[0.07]">
-              <p className="mb-3 flex items-center justify-center gap-1.5 text-[13px] text-[color:var(--text-2)]">
+            <div className="mx-auto mt-10 max-w-sm rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/[0.07] lg:mx-0 lg:mt-8 lg:max-w-md">
+              <p className="mb-3 flex items-center justify-center gap-1.5 text-[13px] text-[color:var(--text-2)] lg:justify-start">
                 <Timer className="h-4 w-4 text-[#ffb347]" /> Diwali is on {dateLabel(diwali.date)}. Your customers are already scrolling.
               </p>
-              <Countdown to={`${diwali.date}T00:00:00`} now={now} />
+              <Countdown to={`${diwali.date}T00:00:00`} now={now} className="justify-center lg:justify-start" />
             </div>
           )}
+          </div>
         </div>
       </section>
 
@@ -227,11 +310,15 @@ export function Landing() {
       </Section>
 
       {/* ---- Samples ---- */}
-      <Section kicker="Made with Digiteq Studio" title="Real posts, made for real businesses">
-        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-5 sm:px-0">
+      <Section kicker="Made by Digiteq" title="Real posts, made for real businesses">
+        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0 lg:grid-cols-6">
           {SAMPLES.map((s) => (
-            <figure key={s.src} className="w-[62%] shrink-0 snap-center sm:w-auto">
-              <img src={s.src} alt={s.label} loading="lazy" className="aspect-[9/16] w-full rounded-2xl object-cover ring-1 ring-white/10" />
+            <figure key={s.poster} className="w-[62%] shrink-0 snap-center sm:w-auto">
+              {s.video ? (
+                <InView src={s.video} poster={s.poster} className="aspect-[9/16] w-full rounded-2xl bg-black object-cover ring-1 ring-white/10" />
+              ) : (
+                <img src={s.poster} alt={s.label} loading="lazy" className="aspect-[9/16] w-full rounded-2xl object-cover ring-1 ring-white/10" />
+              )}
               <figcaption className="mt-2 text-center text-[12.5px] text-[color:var(--text-2)]">{s.label}</figcaption>
             </figure>
           ))}
@@ -239,19 +326,19 @@ export function Landing() {
       </Section>
 
       {/* ---- The pack ---- */}
-      <Section kicker={`The ${OFFER.pack}`} title={<>{PACK.length} festivals. {PACK.length} posts. <span className="serif font-normal text-[#ffc56e]">One Diwali video.</span></>}>
-        <ol className="mx-auto max-w-md space-y-2.5">
+      <Section id="pack" kicker={`The ${OFFER.pack}`} title={<>{PACK.length} festivals. {PACK.length} posts. <span className="serif font-normal text-[#ffc56e]">One Diwali video.</span></>}>
+        <ol className="mx-auto max-w-md space-y-2.5 lg:grid lg:max-w-none lg:grid-cols-5 lg:gap-3 lg:space-y-0">
           {pack.map((f) => (
-            <li key={f.name} className={`flex items-center gap-3 rounded-2xl p-4 ring-1 ${f.video ? 'bg-[#ffb347]/[0.08] ring-[#ffb347]/30' : 'bg-white/[0.03] ring-white/[0.06]'}`}>
-              <div className="w-14 shrink-0 text-center">
-                <div className="mono-num text-[20px] font-semibold leading-none">{f.date ? new Date(`${f.date}T00:00:00`).getDate() : '–'}</div>
+            <li key={f.name} className={`relative flex items-center gap-3 rounded-2xl p-4 ring-1 lg:flex-col lg:items-start lg:gap-5 lg:rounded-3xl lg:p-5 ${f.video ? 'bg-[#ffb347]/[0.08] ring-[#ffb347]/30' : 'bg-white/[0.03] ring-white/[0.06]'}`}>
+              <div className="w-14 shrink-0 text-center lg:w-auto lg:text-left">
+                <div className="mono-num text-[20px] font-semibold leading-none lg:text-[34px]">{f.date ? new Date(`${f.date}T00:00:00`).getDate() : '–'}</div>
                 <div className="mt-1 text-[11px] uppercase tracking-wider text-[color:var(--text-3)]">
                   {f.date ? new Date(`${f.date}T00:00:00`).toLocaleDateString('en-IN', { month: 'short' }) : ''}
                 </div>
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[16px] font-semibold tracking-[-0.01em]">{f.name}</div>
-                <div className="mt-0.5 flex items-center gap-1.5 text-[13px] text-[color:var(--text-2)]">
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[13px] text-[color:var(--text-2)]">
                   <ImageIcon className="h-3.5 w-3.5" /> Post
                   {f.video && (
                     <>
@@ -261,14 +348,14 @@ export function Landing() {
                   )}
                 </div>
               </div>
-              <Check className="h-5 w-5 shrink-0 text-[color:var(--green)]" />
+              <Check className="h-5 w-5 shrink-0 text-[color:var(--green)] lg:absolute lg:right-5 lg:top-5" />
             </li>
           ))}
         </ol>
       </Section>
 
       {/* ---- How it works ---- */}
-      <Section kicker="How it works" title="Ready in 3 steps. About 2 minutes of your time.">
+      <Section id="how" kicker="How it works" title="Ready in 3 steps. About 2 minutes of your time.">
         <div className="grid gap-3 sm:grid-cols-3">
           {[
             [Store, 'Tell us about your business', 'What you do, what you sell, your name and logo. Three quick questions.'],
@@ -295,7 +382,7 @@ export function Landing() {
             [Store, 'Your real products', 'Designed around what you actually sell.'],
             [Palette, 'Your brand colours', 'Read straight from your logo.'],
             [Stamp, 'Your logo, your way', 'Drag it exactly where you want.'],
-            [Phone, 'Your contact on the video', 'Customers know how to reach you.'],
+            [Phone, 'Your contact details on every post', 'Customers know how to reach you.'],
             [Download, 'WhatsApp & Instagram ready', '9:16, sharp, download in one tap.'],
             [RefreshCcw, 'A free redo', 'Don’t love it? Get a new design.'],
           ].map(([Icon, title, body]) => {
@@ -402,10 +489,10 @@ export function Landing() {
       </Section>
 
       {/* ---- FAQ ---- */}
-      <Section kicker="Questions" title="Good to know">
-        <div className="mx-auto max-w-2xl divide-y divide-white/[0.06] rounded-3xl bg-white/[0.03] ring-1 ring-white/[0.06]">
+      <Section id="faq" kicker="Questions" title="Good to know">
+        <div className="mx-auto max-w-2xl divide-y divide-white/[0.06] rounded-3xl bg-white/[0.03] ring-1 ring-white/[0.06] lg:grid lg:max-w-5xl lg:grid-cols-2 lg:items-start lg:gap-3 lg:divide-y-0 lg:bg-transparent lg:ring-0">
           {FAQ.map(([q, a]) => (
-            <details key={q} className="group px-5 py-4">
+            <details key={q} className="group px-5 py-4 lg:rounded-3xl lg:bg-white/[0.03] lg:ring-1 lg:ring-white/[0.06]">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[15px] font-medium">
                 {q}
                 <span className="text-[20px] leading-none text-[color:var(--text-3)] transition-transform group-open:rotate-45">+</span>
@@ -417,7 +504,7 @@ export function Landing() {
       </Section>
 
       {/* ---- Final push ---- */}
-      <section className="relative isolate overflow-hidden px-4 pb-32 pt-10 text-center sm:pb-24">
+      <section className="relative isolate overflow-hidden px-4 pb-32 pt-10 text-center md:pb-24">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(50%_60%_at_50%_100%,rgba(255,150,60,0.22),transparent_70%)]" />
         <h2 className="mx-auto max-w-xl text-balance text-[clamp(1.75rem,6vw,2.75rem)] font-semibold leading-[1.08] tracking-[-0.035em]">
           This Diwali, your customers will see a hundred greetings. <span className="text-[#ffb347]">Make yours the one they remember.</span>
@@ -430,7 +517,7 @@ export function Landing() {
 
       {/* ---- Sticky price bar (phones) and WhatsApp ---- */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-[rgba(10,10,12,0.92)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl transition-transform duration-500 [transition-timing-function:var(--spring)] ${sticky ? 'translate-y-0' : 'translate-y-full'}`}
+        className={`fixed inset-x-0 bottom-0 z-40 border-t md:hidden border-white/[0.08] bg-[rgba(10,10,12,0.92)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl transition-transform duration-500 [transition-timing-function:var(--spring)] ${sticky ? 'translate-y-0' : 'translate-y-full'}`}
       >
         <div className="mx-auto flex max-w-md items-center gap-3">
           <div className="min-w-0 flex-1">
@@ -451,7 +538,7 @@ export function Landing() {
           target="_blank"
           rel="noreferrer"
           aria-label="Chat with us on WhatsApp"
-          className={`press fixed right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-[#25d366] text-white shadow-lg transition-[bottom] duration-500 ${sticky ? 'bottom-24' : 'bottom-5'}`}
+          className={`press fixed right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-[#25d366] text-white shadow-lg transition-[bottom] duration-500 ${sticky ? 'bottom-24 md:bottom-5' : 'bottom-5'}`}
         >
           <MessageCircle className="h-6 w-6" />
         </a>
