@@ -13,6 +13,7 @@ db.exec(`
     role TEXT NOT NULL DEFAULT 'customer', paid INTEGER NOT NULL DEFAULT 0, createdAt TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, email TEXT, phone TEXT, createdAt TEXT NOT NULL, usedAt TEXT);
+  CREATE TABLE IF NOT EXISTS redos (id TEXT PRIMARY KEY, userId TEXT NOT NULL, jobId TEXT NOT NULL, chatId TEXT, festival TEXT NOT NULL, status TEXT NOT NULL, createdAt TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS docs (kind TEXT NOT NULL, id TEXT NOT NULL, userId TEXT, data TEXT NOT NULL, PRIMARY KEY (kind, id));
 `);
 

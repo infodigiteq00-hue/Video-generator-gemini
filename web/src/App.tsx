@@ -4,7 +4,7 @@ import { api } from './api';
 import { APP_NAME } from './config';
 import { upcoming, when } from './festivals';
 import { useJobs } from './hooks/useJobs';
-import type { AppConfig, Brand, Job, LogoPlace, PageId, Provider, User } from './types';
+import type { AppConfig, Brand, Job, LogoPlace, PageId, Provider, Redo, User } from './types';
 import { BrandSetup } from './components/BrandSetup';
 import { Customers } from './components/Customers';
 import { PackHome } from './components/PackHome';
@@ -23,6 +23,7 @@ const FORMAT = { aspectRatio: '9:16', imageSize: '2K', resolution: '720p', durat
 export default function App({ user }: { user: User }) {
   const admin = user.role === 'admin';
   const [paid, setPaid] = useState(user.paid);
+  const [redos, setRedos] = useState<Redo[]>([]);
   const [page, setPage] = useState<PageId>('chat');
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [offline, setOffline] = useState<string | null>(null);
@@ -33,7 +34,7 @@ export default function App({ user }: { user: User }) {
   const [brandLoaded, setBrandLoaded] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
   const [busy, setBusy] = useState<{ request: string; since: string } | null>(null);
-  const { jobs, upsert, remove } = useJobs();
+  const { jobs, upsert, remove, refresh } = useJobs();
   const festivals = useMemo(upcoming, []);
   const [festival, setFestival] = useState(festivals.suggested?.name ?? 'Diwali');
 
@@ -51,6 +52,22 @@ export default function App({ user }: { user: User }) {
       .finally(() => setBrandLoaded(true));
   }, []);
 
+  // Waiting for a paid redo: check every 15 s; once it's made, its new design shows up in the post.
+  useEffect(() => {
+    if (admin) return;
+    void api.myRedos().then(setRedos, () => {});
+  }, [admin]);
+  useEffect(() => {
+    if (!redos.length) return;
+    const t = setInterval(() => {
+      void api.myRedos().then((list) => {
+        if (list.length < redos.length) void refresh();
+        setRedos(list);
+      }, () => {});
+    }, 15000);
+    return () => clearInterval(t);
+  }, [redos, refresh]);
+
   // Until the payment is confirmed, check every 15 s so the pack unlocks on its own.
   useEffect(() => {
     if (paid) return;
@@ -63,7 +80,7 @@ export default function App({ user }: { user: User }) {
     () =>
       jobs
         .filter((j) => !j.auto)
-        .map((j) => ({ id: j.chatId ?? LEGACY, title: j.title ?? j.request ?? j.prompt, updatedAt: j.updatedAt }))
+        .map((j) => ({ id: j.chatId ?? LEGACY, title: j.title ?? j.request ?? j.prompt ?? 'Post', updatedAt: j.updatedAt }))
         .filter((p, i, all) => all.findIndex((x) => x.id === p.id) === i),
     [jobs],
   );
@@ -92,9 +109,6 @@ export default function App({ user }: { user: User }) {
       setBusy(null);
     }
   }
-
-  // Designs made for a festival so far (failed ones don't count), for the pack's redo limit.
-  const designsMade = (festival: string) => jobs.filter((j) => j.kind === 'image' && j.request === festival && j.status !== 'failed').length;
 
   async function placeLogo(job: Job, place: LogoPlace | null) {
     try {
@@ -177,11 +191,22 @@ export default function App({ user }: { user: User }) {
             <Post
               image={image}
               video={video}
-              logoUrl={brand.logoUrl}
+              logos={brand.logoVariants ?? (brand.logoUrl ? { color: brand.logoUrl } : null)}
               onPlaceLogo={placeLogo}
-              onRetry={() => void generate({ request: image.request ?? image.prompt })}
-              redosLeft={admin ? null : Math.max(0, (config?.pack.designs ?? 1) - designsMade(image.request ?? ''))}
-              onRedo={() => void generate({ request: image.request ?? '' })}
+              onRetry={() => void generate({ request: image.request ?? '' })}
+              onRedo={admin ? () => void generate({ request: image.request ?? '' }) : undefined}
+              redo={
+                admin
+                  ? undefined
+                  : {
+                      price: config?.pack.redoPrice ?? 199,
+                      pending: redos.some((r) => r.chatId === image.chatId),
+                      onRequest: async () => {
+                        const r = await api.requestRedo(image.id);
+                        setRedos((list) => [...list.filter((x) => x.id !== r.id), r]);
+                      },
+                    }
+              }
               back={admin ? undefined : { label: `My ${config?.pack.name ?? 'pack'}`, run: () => open(newId()) }}
               onMakeVideo={() => void generate({ changeOf: image.id })}
               onDelete={async () => {

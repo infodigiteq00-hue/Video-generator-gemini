@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowRight, CalendarClock, Check, Clock, Download, Film, Image as ImageIcon, MessageCircle, Palette, Phone, RefreshCcw,
+  ArrowRight, CalendarClock, Check, Clock, Download, Film, Image as ImageIcon, MessageCircle, Palette, Phone,
   ShieldCheck, Sparkles, Star, Stamp, Store, Timer, Wand2,
 } from 'lucide-react';
 import { api } from '../api';
@@ -12,12 +12,14 @@ import { Logo } from './Logo';
 
 // Keep in step with PACK in server/src/index.js.
 const PACK = [
-  { name: 'Dhanteras', video: false },
+  { name: 'Dhanteras', video: true },
   { name: 'Diwali', video: true },
-  { name: 'Hindu New Year', video: false },
+  { name: 'Hindu New Year', video: true },
   { name: 'Bhai Dooj', video: false },
   { name: 'Labh Pancham', video: false },
 ];
+
+const VIDEOS = PACK.filter((f) => f.video).length;
 
 const BUSINESSES = ['Jewellers', 'Sweet shops', 'Manufacturers', 'Clinics', 'Boutiques', 'Restaurants', 'Builders', 'Electronics', 'Coaching classes', 'CA firms', 'Salons', 'Traders'];
 
@@ -103,8 +105,7 @@ function InView({ src, poster, className }: { src: string; poster: string; class
 const FAQ = [
   ['Do I need a designer or any design skills?', 'No. Answer three questions about your business, upload your logo, and tap Generate on each festival. That’s it.'],
   ['Will it look like a template everyone else is using?', 'No. Every post is designed fresh for your business, around the products and services you tell us about, in your brand colours.'],
-  ['What exactly do I get for ' + rupees(OFFER.price) + '?', `${PACK.length} festival posts: ${PACK.map((f) => f.name).join(', ')}. Diwali also comes as a video that ends with your contact details. All in 9:16, ready for WhatsApp status, Instagram and Facebook.`],
-  ['What if I don’t like a design?', 'Every festival comes with one free redo, so you can get a completely new design.'],
+  ['What exactly do I get for ' + rupees(OFFER.price) + '?', `${PACK.length} festival posts: ${PACK.map((f) => f.name).join(', ')}. ${PACK.filter((f) => f.video).map((f) => f.name).join(', ')} come as videos, the others as photo posts. All personalised for your business, in 9:16, ready for WhatsApp status, Instagram and Facebook.`],
   ['I don’t have a logo. Can I still use it?', 'Yes. Pick your brand colours instead and we design around them.'],
   ['How do I pay?', 'By UPI, with any app: Google Pay, PhonePe, Paytm or your bank app. Once your payment is confirmed, your pack unlocks.'],
   ['How fast will I get my posts?', 'A post takes a few minutes and the video a couple more. You can make each festival’s post as soon as your pack unlocks.'],
@@ -238,7 +239,7 @@ export function Landing() {
             Your Diwali posts, designed for <span className="serif bg-[linear-gradient(135deg,#ffd27a,#ff8a3d)] bg-clip-text pr-[0.08em] font-normal text-transparent">your business.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-[16.5px] leading-relaxed text-[color:var(--text-2)] lg:mx-0 lg:text-[18px]">
-            Tell us what you sell. Our AI designs {PACK.length} festival posts and a Diwali video with <b className="font-medium text-[color:var(--text)]">your products</b>,{' '}
+            Tell us what you sell. Our AI designs {PACK.length} festival posts, {VIDEOS} of them videos, with <b className="font-medium text-[color:var(--text)]">your products</b>,{' '}
             <b className="font-medium text-[color:var(--text)]">your colours</b> and <b className="font-medium text-[color:var(--text)]">your logo</b>. Ready for WhatsApp and Instagram in minutes.
           </p>
           </div>
@@ -326,7 +327,7 @@ export function Landing() {
       </Section>
 
       {/* ---- The pack ---- */}
-      <Section id="pack" kicker={`The ${OFFER.pack}`} title={<>{PACK.length} festivals. {PACK.length} posts. <span className="serif font-normal text-[#ffc56e]">One Diwali video.</span></>}>
+      <Section id="pack" kicker={`The ${OFFER.pack}`} title={<>{PACK.length} festivals. {PACK.length} posts. <span className="serif font-normal text-[#ffc56e]">{VIDEOS} videos.</span></>}>
         <ol className="mx-auto max-w-md space-y-2.5 lg:grid lg:max-w-none lg:grid-cols-5 lg:gap-3 lg:space-y-0">
           {pack.map((f) => (
             <li key={f.name} className={`relative flex items-center gap-3 rounded-2xl p-4 ring-1 lg:flex-col lg:items-start lg:gap-5 lg:rounded-3xl lg:p-5 ${f.video ? 'bg-[#ffb347]/[0.08] ring-[#ffb347]/30' : 'bg-white/[0.03] ring-white/[0.06]'}`}>
@@ -339,11 +340,13 @@ export function Landing() {
               <div className="min-w-0 flex-1">
                 <div className="text-[16px] font-semibold tracking-[-0.01em]">{f.name}</div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[13px] text-[color:var(--text-2)]">
-                  <ImageIcon className="h-3.5 w-3.5" /> Post
-                  {f.video && (
+                  {f.video ? (
                     <>
-                      <span>+</span>
-                      <Film className="h-3.5 w-3.5 text-[#ffb347]" /> <span className="text-[#ffc56e]">Video with your contact details</span>
+                      <Film className="h-3.5 w-3.5 text-[#ffb347]" /> <span className="text-[#ffc56e]">Personalised video post</span>
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="h-3.5 w-3.5" /> Personalised photo post
                     </>
                   )}
                 </div>
@@ -384,7 +387,7 @@ export function Landing() {
             [Stamp, 'Your logo, your way', 'Drag it exactly where you want.'],
             [Phone, 'Your contact details on every post', 'Customers know how to reach you.'],
             [Download, 'WhatsApp & Instagram ready', '9:16, sharp, download in one tap.'],
-            [RefreshCcw, 'A free redo', 'Don’t love it? Get a new design.'],
+            [Wand2, 'Ready in minutes', 'Every post designed fresh, just for you.'],
           ].map(([Icon, title, body]) => {
             const I = Icon as typeof Store;
             return (
@@ -446,9 +449,8 @@ export function Landing() {
           <ul className="mt-6 space-y-2.5 text-[14.5px]">
             {[
               `${PACK.length} custom festival posts`,
-              'A Diwali video with your contact details at the end',
+              `${VIDEOS} of them as videos: ${PACK.filter((f) => f.video).map((f) => f.name).join(', ')}`,
               'Your products, colours and logo in every design',
-              'One free redo for every festival',
               'Download in one tap, ready for WhatsApp & Instagram',
             ].map((t) => (
               <li key={t} className="flex gap-2.5">
@@ -525,7 +527,7 @@ export function Landing() {
               <span className="text-[20px] font-semibold tracking-[-0.03em]">{rupees(price)}</span>
               {launch && <span className="text-[13px] text-[color:var(--text-3)] line-through">{rupees(OFFER.regularPrice)}</span>}
             </div>
-            <div className="truncate text-[12px] text-[color:var(--text-2)]">{OFFER.pack} · {PACK.length} posts + video</div>
+            <div className="truncate text-[12px] text-[color:var(--text-2)]">{OFFER.pack} · {PACK.length} posts · {VIDEOS} videos</div>
           </div>
           <Cta className="h-12 shrink-0 px-5 text-[15px]">
             Get it now <ArrowRight className="h-4 w-4" />

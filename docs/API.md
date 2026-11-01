@@ -97,3 +97,10 @@ All `/api` routes need a session cookie except: `POST /api/login`, `POST /api/lo
   `POST /api/admin/invites` `{ email, phone }` → `{ url }`
 - `GET /api/config` also returns `pack: { name, festivals, video, designs }`.
 - `POST /api/brand-posts` for customers: `402` until paid; `400` for a festival outside the pack or after `designs` posts for it.
+
+## Logos and paid redos
+
+- `POST /api/logo/preview` multipart `logo` (no sign-in needed) → `{ background: 'transparent' | 'solid' | 'none', previews: { keep, outer?, all? } }` (PNG data URLs).
+  Brand saves take `logoBg`: `keep` | `outer` | `all`. Brands return `logoVariants: { color, light?, grey? }`; `POST /api/jobs/:id/logo` takes `variant`.
+- `POST /api/redos` `{ jobId }` → a pending request for a new design of that post (₹`pack.redoPrice`); `GET /api/redos` → the customer's pending ones.
+- Admin: `GET /api/admin/redos` → pending requests with business and contact; `POST /api/admin/redos/:id` → payment confirmed, makes the new design in the same post.

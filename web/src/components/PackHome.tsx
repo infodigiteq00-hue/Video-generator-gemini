@@ -28,7 +28,7 @@ export function PackHome({ pack, brand, paid, jobs, busy, error, onGenerate, onO
         {brand.logoUrl && <img src={brand.logoUrl} alt={`${brand.name} logo`} className="mx-auto mb-4 h-12 max-w-[160px] rounded-xl bg-white/90 object-contain p-2" />}
         <h1 className="text-[clamp(1.6rem,6vw,2.2rem)] font-semibold tracking-[-0.03em]">Your {pack.name}</h1>
         <p className="mt-1 text-[14px] text-[color:var(--text-2)]">
-          {pack.festivals.length} festival posts for {brand.name}, plus a Diwali video.
+          {pack.festivals.length} personalised festival posts for {brand.name}, {pack.video.length} of them videos.
         </p>
       </div>
 
@@ -76,7 +76,7 @@ export function PackHome({ pack, brand, paid, jobs, busy, error, onGenerate, onO
                 <div className="min-w-0 flex-1">
                   <div className="text-[16px] font-semibold tracking-[-0.01em]">{f.name}</div>
                   <div className="mt-0.5 text-[12.5px] text-[color:var(--text-2)]">
-                    {f.date ? when(f.date) : ''} · {f.video ? 'Post + video' : 'Post'}
+                    {f.date ? when(f.date) : ''} · {f.video ? 'Video post' : 'Photo post'}
                   </div>
                 </div>
                 {!paid ? (

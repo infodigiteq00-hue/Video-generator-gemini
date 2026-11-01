@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, Loader2, MessageCircle, UserPlus } from 'lucide-react';
+import { Check, Copy, Loader2, MessageCircle, RotateCcw, UserPlus } from 'lucide-react';
 import { api } from '../api';
-import type { Customer } from '../types';
+import type { AdminRedo, Customer } from '../types';
 
 const field =
   'w-full rounded-2xl bg-white/[0.05] px-4 py-2.5 text-[15px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]';
@@ -9,13 +9,25 @@ const field =
 /** Admin: customers, confirming their payments, and invite links for people who paid but couldn't sign up. */
 export function Customers() {
   const [list, setList] = useState<Customer[] | null>(null);
+  const [redos, setRedos] = useState<AdminRedo[]>([]);
+  const [making, setMaking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [invite, setInvite] = useState({ email: '', phone: '' });
   const [link, setLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const load = () => api.customers().then(setList, (e: Error) => setError(e.message));
+  const load = () => {
+    void api.adminRedos().then(setRedos, () => {});
+    return api.customers().then(setList, (e: Error) => setError(e.message));
+  };
+
+  async function approve(r: AdminRedo) {
+    setMaking(r.id);
+    await api.approveRedo(r.id).catch((e: Error) => setError(e.message));
+    setMaking(null);
+    await load();
+  }
   useEffect(() => void load(), []);
 
   async function togglePaid(c: Customer) {
@@ -44,6 +56,32 @@ export function Customers() {
       <p className="mt-1 text-[14px] text-[color:var(--text-2)]">
         {list ? `${list.length} accounts · ${pending} waiting for payment confirmation` : 'Loading…'}
       </p>
+
+      {redos.length > 0 && (
+        <section className="mt-6 rounded-3xl bg-[color:var(--amber)]/[0.07] p-5 ring-1 ring-[color:var(--amber)]/25">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold">
+            <RotateCcw className="h-4 w-4" /> New design requests ({redos.length})
+          </h2>
+          <p className="mt-1 text-[13px] text-[color:var(--text-2)]">Check the payment came in, then make the new design. It appears in the customer’s post.</p>
+          <ul className="mt-3 divide-y divide-white/[0.06]">
+            {redos.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-center gap-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[14.5px] font-medium">
+                    {r.business ?? 'Customer'} · {r.festival}
+                  </div>
+                  <div className="truncate text-[12.5px] text-[color:var(--text-2)]">
+                    {[r.phone, r.email].filter(Boolean).join(' · ')} · asked {new Date(r.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                  </div>
+                </div>
+                <button className="btn-light h-9" disabled={making === r.id} onClick={() => void approve(r)}>
+                  {making === r.id && <Loader2 className="h-4 w-4 animate-spin" />} Paid, make it
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="mt-6 rounded-3xl bg-white/[0.03] p-5 ring-1 ring-white/[0.06]">
         <h2 className="flex items-center gap-2 text-[15px] font-semibold">

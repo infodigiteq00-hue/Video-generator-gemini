@@ -6,7 +6,7 @@ import path from 'node:path';
 import { omni } from './providers/omni.js';
 import { mock } from './providers/mock.js';
 import { mockImage, nanoBanana } from './providers/image.js';
-import { addEndCard, defaultPlace, getBrand, hasContact, stampBrand, writeVideoPrompt } from './brand.js';
+import { LOGO_VARIANTS, addEndCard, defaultPlace, getBrand, hasContact, stampBrand, writeVideoPrompt } from './brand.js';
 import { DATA_DIR, OUTPUTS_DIR, UPLOADS_DIR } from './paths.js';
 import { adminId } from './auth.js';
 import { collection } from './db.js';
@@ -53,8 +53,10 @@ export function listJobs(userId) {
 }
 
 // Internal fields (operationName, file paths) stay on the server.
-export function toPublic(job) {
+// Brand posts' prompts are our own work, so only admins get them; ChatGPT jobs keep the prompt the user typed.
+export function toPublic(job, admin = false) {
   const { operationName, imagePath, imageMimeType, outputPath, cleanPath, next, ...rest } = job;
+  if (job.brandId && !admin) delete rest.prompt;
   const end = job.status === 'succeeded' || job.status === 'failed' ? job.updatedAt : Date.now();
   const cleanUrl = cleanPath ? `/media/videos/${path.basename(cleanPath)}` : null; // the version without the logo
   return { ...rest, cleanUrl, makesVideo: Boolean(next), elapsedSeconds: Math.round((new Date(end) - new Date(job.createdAt)) / 1000) };
@@ -156,7 +158,7 @@ export function createJob({
 // contact bar). A new file name each time, so browsers never show a cached copy.
 async function framed(job, brand, place) {
   let outputPath = job.cleanPath;
-  if (place || hasContact(brand)) {
+  if (place || hasContact(brand) || !brand.logoPath) {
     const ext = job.kind === 'video' ? '.mp4' : path.extname(job.cleanPath) === '.png' ? '.png' : '.jpg';
     outputPath = path.join(OUTPUTS_DIR, `${job.id}-logo-${Date.now()}${ext}`);
     await stampBrand(job.cleanPath, outputPath, brand, place);
@@ -186,6 +188,7 @@ export async function placeLogo(job, place) {
   if (job.status !== 'succeeded' || !job.cleanPath) throw new ValidationError('This post is not ready yet');
   const ok = (v, lo, hi) => typeof v === 'number' && v >= lo && v <= hi;
   if (place && !(ok(place.x, -0.5, 1) && ok(place.y, -0.5, 1) && ok(place.w, 0.02, 1))) throw new ValidationError('Invalid logo position');
+  if (place) place = { x: place.x, y: place.y, w: place.w, variant: LOGO_VARIANTS.includes(place.variant) ? place.variant : 'color' };
 
   const old = job.outputPath !== job.cleanPath ? job.outputPath : null;
   const fields = await framed(job, brand, place);

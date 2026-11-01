@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import { adminId } from './auth.js';
 import { collection } from './db.js';
 import { fetchRetry } from './providers/http.js';
+import { processLogo } from './logo.js';
 import { WebsiteError, normalizeUrl, readWebsite } from './website.js';
 
 const TEXT_MODEL = process.env.TEXT_MODEL || 'gemini-flash-latest';
@@ -26,10 +27,18 @@ export const getBrand = (id) => brands.get(id);
 export const brandOf = (userId) =>
   [...brands.values()].filter((b) => b.userId === userId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0] ?? null;
 
+export const LOGO_VARIANTS = ['color', 'light', 'grey'];
+const mediaUrl = (file) => `/media/uploads/${path.basename(file)}`;
+
 export function brandToPublic(b) {
-  const { logoPath, logoMime, ...rest } = b;
-  return rest;
+  const { logoPath, logoMime, logoFiles, ...rest } = b;
+  // The logo in its original colours, all white and all dark (the last two only for logos without a solid background).
+  const variants = logoFiles ? Object.fromEntries(LOGO_VARIANTS.filter((v) => logoFiles[v]).map((v) => [v, mediaUrl(logoFiles[v])])) : b.logoUrl ? { color: b.logoUrl } : null;
+  return { ...rest, logoVariants: variants };
 }
+
+// The logo file for a version, falling back to the original colours.
+const logoFile = (brand, variant) => brand.logoFiles?.[variant] || brand.logoPath;
 
 const CONTACT_FIELDS = ['phone', 'email', 'website', 'address'];
 
@@ -83,7 +92,8 @@ function cleanColors(list) {
 
 // `logo` is { path, mimetype } of an uploaded file, or null to keep the current one (or for no logo).
 // Colours come from the logo; without one, from `colors` picked by hand.
-export async function saveBrand({ id, userId, name, industry, logo, website, featured, contact, endCard, colors, tagline }) {
+// `logoBg` is what to do with a solid background behind a new logo: 'keep', 'outer' or 'all' (see logo.js).
+export async function saveBrand({ id, userId, name, industry, logo, website, featured, contact, endCard, colors, tagline, logoBg }) {
   industry = (industry || '').trim();
   name = (name || '').trim();
   if (!name) throw new BrandError('Tell us your business name');
@@ -106,8 +116,16 @@ export async function saveBrand({ id, userId, name, industry, logo, website, fea
 
   const brand = existing ?? { id: crypto.randomUUID(), userId, createdAt: new Date().toISOString() };
   if (logo) {
-    if (existing?.logoPath) fs.rmSync(existing.logoPath, { force: true });
-    Object.assign(brand, { logoPath: logo.path, logoMime: logo.mimetype, logoUrl: `/media/uploads/${path.basename(logo.path)}` });
+    let files;
+    try {
+      files = await processLogo(logo.path, logoBg);
+    } catch {
+      throw new BrandError('We couldn’t read that logo. Try a PNG or JPEG.');
+    } finally {
+      fs.rmSync(logo.path, { force: true });
+    }
+    for (const f of [existing?.logoPath, ...Object.values(existing?.logoFiles ?? {})]) if (f) fs.rmSync(f, { force: true });
+    Object.assign(brand, { logoPath: files.color, logoMime: 'image/png', logoFiles: files, logoUrl: mediaUrl(files.color) });
   }
   Object.assign(brand, {
     name, industry, featured, contact, tagline,
@@ -239,23 +257,25 @@ export function imagePrompt(brand, festival) {
     '- the festival’s story or ritual told in their brand colours, with a clear nod to what they make.',
     'Products always look exactly like the real thing: real shape, materials and finish.',
     '',
-    `THE LOOK: photoreal and cinematic, rich in detail, with soft natural light: the quality of a national brand’s festive campaign. ` +
-      `Warm, joyful and full of ${festival}: its traditional decorations, lights and colours` +
+    `THE LOOK: photoreal and cinematic, rich in detail: the quality of a national brand’s festive campaign. ` +
+      'Bright, luminous and celebratory: fresh daylight or a glowing golden light that fills the whole frame, never dark, gloomy or dull. ' +
+      `Joyful and full of ${festival}: its traditional decorations, lights and colours` +
       (/diwali/i.test(festival) ? ' (diyas, rangoli, marigolds, fireworks)' : '') +
-      '. Elegant and uncluttered, with room to breathe.' +
-      (brand.colors?.length ? ` Brand colours ${brand.colors.join(', ')} lead the palette, in harmony with the festival’s colours.` : ''),
+      ', used generously. Vivid, uplifting colour chemistry: saturated festive hues (marigold, saffron, magenta, turquoise, gold) ' +
+      'in harmony with each other and with the brand. Elegant and uncluttered, with room to breathe.' +
+      (brand.colors?.length ? ` Brand colours ${brand.colors.join(', ')} lead the palette.` : ''),
     '',
     'THE LAYOUT, a vertical 9:16 post:',
-    brand.logoPath
-      ? '- Top 12%: a clean, calm area in the centre. Our real logo goes there, so put nothing there.'
-      : `- Top: "${brand.name}" in refined lettering, centred.`,
+    '- Top 12%: just the scene itself continuing softly (wall, sky or light), calm and uncluttered: no text, no name, no band, ' +
+      `no box and no frame there, because our ${brand.logoPath ? 'real logo' : 'business name'} is placed on top of it.`,
     `- The greeting people really use for ${festival} (like "Happy Diwali" or "Merry Christmas"): the first word small, in widely spaced ` +
       'capitals, and the festival name large, ornamental and elegant, in the brand colours with a subtle metallic or glowing finish. ' +
-      `Place it where it balances the picture best: under the ${brand.logoPath ? 'logo area' : 'name'} or in the lower third.`,
+      'Place it where it balances the picture best: under the top area or in the lower third.',
     brand.tagline
       ? `- Under the greeting, in a small refined serif: "${brand.tagline}"`
       : `- Under the greeting, one short warm line in a small refined serif that links ${festival} to what they do (at most 10 words).`,
-    hasContact(brand) && '- Bottom 8%: keep it plain and free of anything important. Our contact details bar goes there.',
+    hasContact(brand) && '- Bottom 10%: keep it plain, with no text and nothing important. Our contact details bar goes there.',
+    `- Never write the business name anywhere, not even on products or packaging: our ${brand.logoPath ? 'logo' : 'name at the top'} carries it.`,
     '- Every word spelled perfectly. No other text, no logos, no watermarks.',
   ];
   return lines.filter((l) => l !== null && l !== undefined && l !== false).join('\n');
@@ -272,8 +292,8 @@ export async function writeVideoPrompt(brand, festival, imagePath, seconds = 8) 
     parts: [
       {
         text:
-          `This is a ${festival} post for ${brand.name} (${brand.industry}). Turn it into an elegant ${seconds} second video, like a national ` +
-          'brand’s festive film. Motion is cinematic and purposeful, never chaotic: the scene comes alive (people move naturally, products ' +
+          `This is a ${festival} post for ${brand.name} (${brand.industry}). Turn it into an elegant, bright and joyful ${seconds} second video, ` +
+          'like a national brand’s festive film. Keep it as luminous and colourful as the post. Motion is cinematic and purposeful, never chaotic: the scene comes alive (people move naturally, products ' +
           'assemble or reveal themselves, a gift box opens, diyas flicker, petals and sparkles drift, fireworks bloom), with a slow, smooth ' +
           'camera push-in. Build to a beautiful final moment that matches the post. ' +
           'Describe the motion beat by beat, and the music and sounds that suit the festival and region. ' +
@@ -344,12 +364,20 @@ function text(tmp, key, value, { fontfile, size, color, top, alpha }) {
   );
 }
 
-// The default logo spot: centred in the calm area the image prompt leaves at the top.
+// The default logo spot: centred in the calm area the image prompt leaves at the top, in the white version when
+// that area is dark (and the logo has one), else in its own colours.
 export async function defaultPlace(brand, input) {
   const v = await probe(input);
   const l = await probe(brand.logoPath);
   const w = Math.min(0.34, ((0.075 * v.h) / v.w) * (l.w / l.h));
-  return { x: +((1 - w) / 2).toFixed(4), y: 0.03, w: +w.toFixed(4) };
+  const dark = await topIsDark(input);
+  return { x: +((1 - w) / 2).toFixed(4), y: 0.03, w: +w.toFixed(4), variant: dark && brand.logoFiles?.light ? 'light' : 'color' };
+}
+
+// Whether the calm area at the top of a post (or a video's first frame) is dark.
+async function topIsDark(input) {
+  const { stdout } = await run('ffmpeg', ['-v', 'error', '-i', input, '-frames:v', '1', '-vf', 'crop=iw*0.5:ih*0.12:iw*0.25:0,scale=1:1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { encoding: 'buffer' });
+  return lum([...stdout.subarray(0, 3)]) < 0.42;
 }
 
 // Two balanced rows for the contact bar: phone and email, then website and address.
@@ -358,8 +386,9 @@ const contactRows = (c = {}) =>
     .map((r) => r.filter(Boolean).join('   ·   '))
     .filter(Boolean);
 
-// The brand frame on an image or an MP4: the logo at `place` ({ x, y, w } fractions of the frame; null = no logo)
-// and, when the client wants their contact details shown, a bar across the bottom in their darkest brand colour.
+// The brand frame on an image or an MP4: the logo at `place` ({ x, y, w } fractions of the frame; null = no logo),
+// or for clients without a logo their name at the top, and, when they want their contact details shown, a bar
+// across the bottom in their darkest brand colour.
 export async function stampBrand(input, output, brand, place) {
   const { w, h } = await probe(input);
   const args = ['-y', '-v', 'error', '-i', input];
@@ -367,12 +396,18 @@ export async function stampBrand(input, output, brand, place) {
   const chain = ['[0:v]format=rgb24[base]'];
   let last = 'base';
   if (place && brand.logoPath) {
-    args.push('-i', brand.logoPath);
+    args.push('-i', logoFile(brand, place.variant));
     chain.push(`[1:v]scale=${even(w * place.w)}:-2[logo]`, `[base][logo]overlay=${Math.round(w * place.x)}:${Math.round(h * place.y)}[l]`);
     last = 'l';
   }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'frame-'));
   try {
+    if (!brand.logoPath && brand.name) {
+      const size = Math.round(Math.min(h * 0.032, (w * 0.8) / (brand.name.length * 0.62)));
+      const color = (await topIsDark(input)) ? 'white' : darkBrand(brand.colors);
+      chain.push(`[${last}]${text(tmp, 'name', brand.name.toUpperCase(), { fontfile: font('serif'), size, color, top: Math.round(h * 0.045) })}[n]`);
+      last = 'n';
+    }
     if (hasContact(brand)) {
       const band = even(h * 0.075);
       const rows = contactRows(brand.contact);

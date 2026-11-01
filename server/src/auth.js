@@ -188,7 +188,7 @@ export function mountAuth(app) {
 
 // Everything under /api needs a session, except signing up and in, the landing page's numbers, and what the
 // ChatGPT player needs (it polls a job by its unguessable id from outside the app, where there is no cookie).
-const OPEN = ['/api/login', '/api/logout', '/api/me', '/api/signup', '/api/public/stats'];
+const OPEN = ['/api/login', '/api/logout', '/api/me', '/api/signup', '/api/public/stats', '/api/logo/preview'];
 export function requireAuth(req, res, next) {
   const p = req.originalUrl.split('?')[0]; // req.path is relative to where this is mounted
   const open = OPEN.includes(p) || p.startsWith('/api/invites/') || (req.method === 'GET' && /^\/api\/jobs\/[\w-]+$/.test(p));

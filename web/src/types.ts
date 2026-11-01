@@ -15,7 +15,8 @@ export interface Job {
   chatId: string | null;
   provider: string;
   status: JobStatus;
-  prompt: string;
+  /** Not sent to customers for brand posts */
+  prompt?: string;
   negativePrompt: string | null;
   aspectRatio: AspectRatio;
   /** Video only */
@@ -78,8 +79,26 @@ export interface Pack {
   festivals: string[];
   /** Festivals that also get a video */
   video: string[];
-  /** Designs allowed per festival (the first one plus redos) */
+  /** Designs a customer can make per festival themselves; more are paid redos */
   designs: number;
+  /** Rupees for a new design of a post */
+  redoPrice: number;
+}
+
+/** A customer's request for a new design of a post, made once an admin confirms the payment */
+export interface Redo {
+  id: string;
+  jobId: string;
+  chatId: string | null;
+  festival: string;
+  status: 'pending' | 'done';
+  createdAt: string;
+}
+
+export interface AdminRedo extends Redo {
+  business: string | null;
+  phone: string | null;
+  email: string | null;
 }
 
 export interface User {
@@ -121,6 +140,7 @@ export interface Brand {
   industry: string;
   /** null when the client has no logo and picked colours by hand */
   logoUrl: string | null;
+  logoVariants?: LogoVariants | null;
   colors: string[];
   style: string;
   website?: string | null;
@@ -161,6 +181,8 @@ export interface BrandInput {
   /** Picked by hand when there's no logo; otherwise read from the logo */
   colors: string[];
   tagline: string;
+  /** What to do with a solid background behind a new logo */
+  logoBg?: LogoBg;
   logo: File | null;
 }
 
@@ -181,4 +203,17 @@ export interface LogoPlace {
   x: number;
   y: number;
   w: number;
+  /** Which version of the logo: original colours, all white or all dark */
+  variant?: LogoVariant;
 }
+
+export type LogoBg = 'keep' | 'outer' | 'all';
+export interface LogoPreview {
+  background: 'transparent' | 'solid' | 'none';
+  /** PNG data URL per background choice (only 'keep' unless the background is solid) */
+  previews: Partial<Record<LogoBg, string>>;
+}
+
+export type LogoVariant = 'color' | 'light' | 'grey';
+/** Logo image URL per version; light and grey only exist for logos without a solid background */
+export type LogoVariants = Partial<Record<LogoVariant, string>> & { color: string };

@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ArrowLeft, Check, Download, Film, Image as ImageIcon, RotateCcw, Stamp, Trash2 } from 'lucide-react';
 import { formatElapsed } from '../format';
-import { isActiveStatus, type Job, type LogoPlace } from '../types';
+import { isActiveStatus, type Job, type LogoPlace, type LogoVariant, type LogoVariants } from '../types';
 import { DEFAULT_LOGO, LogoEditor } from './LogoEditor';
+import { PayBox } from './PayBox';
 
 interface Props {
   /** The brand post (image) and the video made from it, if started. */
   image: Job;
   video: Job | null;
-  logoUrl: string | null;
+  logos: LogoVariants | null;
   onPlaceLogo: (job: Job, place: LogoPlace | null) => Promise<void>;
   onRetry: () => void;
-  /** Customers' remaining new designs for this festival; null = no limit (admins) */
-  redosLeft: number | null;
-  onRedo: () => void;
+  /** Admins: make a new design right away */
+  onRedo?: () => void;
+  /** Customers: a new design is paid; `pending` once they've asked and are waiting for the payment to be confirmed */
+  redo?: { price: number; pending: boolean; onRequest: () => Promise<void> };
   onMakeVideo: () => void;
   onDelete: () => void;
   /** Back to the customer's pack (absent for admins) */
@@ -67,7 +69,11 @@ export function Waiting({ request, since, image, video }: { request: string; sin
 }
 
 /** One finished (or rendering) result with its logo placement and download. */
-function Media({ job, label, logoUrl, onPlaceLogo }: { job: Job; label: string; logoUrl: string | null; onPlaceLogo: Props['onPlaceLogo'] }) {
+const VARIANT_LABELS: Record<LogoVariant, string> = { color: 'Colour', light: 'White', grey: 'Grey' };
+
+function Media({ job, label, logos, onPlaceLogo }: { job: Job; label: string; logos: LogoVariants | null; onPlaceLogo: Props['onPlaceLogo'] }) {
+  const [variant, setVariant] = useState<LogoVariant>(job.logo?.variant ?? 'color');
+  const logoUrl = logos ? (logos[variant] ?? logos.color) : null;
   const [editing, setEditing] = useState(false);
   const [place, setPlace] = useState<LogoPlace | null>(null);
   const [saving, setSaving] = useState(false);
@@ -118,7 +124,18 @@ function Media({ job, label, logoUrl, onPlaceLogo }: { job: Job; label: string; 
         <div className="mt-3 flex flex-wrap gap-2">
           {editing ? (
             <>
-              <button className="btn-light h-9" disabled={saving} onClick={() => void save(place ?? job.logo ?? DEFAULT_LOGO)}>
+              {logos && Object.keys(logos).length > 1 && (
+                <div className="seg w-full" role="radiogroup" aria-label="Logo colour">
+                  {(Object.keys(VARIANT_LABELS) as LogoVariant[])
+                    .filter((v) => logos[v])
+                    .map((v) => (
+                      <button key={v} type="button" role="radio" aria-checked={variant === v} className="seg-item flex-1" onClick={() => setVariant(v)}>
+                        {VARIANT_LABELS[v]}
+                      </button>
+                    ))}
+                </div>
+              )}
+              <button className="btn-light h-9" disabled={saving} onClick={() => void save({ ...(place ?? job.logo ?? DEFAULT_LOGO), variant })}>
                 <Check className="h-4 w-4" /> {saving ? 'Applying…' : 'Apply logo'}
               </button>
               <button className="btn-quiet h-9" disabled={saving} onClick={() => void save(null)}>
@@ -147,7 +164,9 @@ function Media({ job, label, logoUrl, onPlaceLogo }: { job: Job; label: string; 
   );
 }
 
-export function Post({ image, video, logoUrl, onPlaceLogo, onRetry, redosLeft, onRedo, onMakeVideo, onDelete, back }: Props) {
+export function Post({ image, video, logos, onPlaceLogo, onRetry, onRedo, redo, onMakeVideo, onDelete, back }: Props) {
+  const [paying, setPaying] = useState(false);
+  const [sending, setSending] = useState(false);
   // Until the image is in, there's nothing to look at: show the wait screen.
   if (isActiveStatus(image.status)) return <Waiting request={image.request ?? 'festival'} since={image.createdAt} image={image} video={video} />;
 
@@ -171,9 +190,9 @@ export function Post({ image, video, logoUrl, onPlaceLogo, onRetry, redosLeft, o
         </div>
       ) : (
         <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-start sm:justify-center">
-          <Media job={image} label="Your post" logoUrl={logoUrl} onPlaceLogo={onPlaceLogo} />
+          <Media job={image} label="Your post" logos={logos} onPlaceLogo={onPlaceLogo} />
           {video ? (
-            <Media job={video} label="Your video" logoUrl={logoUrl} onPlaceLogo={onPlaceLogo} />
+            <Media job={video} label="Your video" logos={logos} onPlaceLogo={onPlaceLogo} />
           ) : image.followUpError ? (
             <div className="w-full max-w-[340px] text-center sm:pt-24">
               <p className="text-[13px] text-[color:var(--text-2)]">{image.followUpError}</p>
@@ -190,17 +209,62 @@ export function Post({ image, video, logoUrl, onPlaceLogo, onRetry, redosLeft, o
         </p>
       )}
       <div className="mt-10 flex flex-col items-center gap-3">
-        {image.status === 'succeeded' && !(video && isActiveStatus(video.status)) && redosLeft !== 0 && (
-          <button className="btn-quiet h-10" onClick={onRedo}>
-            <RotateCcw className="h-4 w-4" /> Try a different design{redosLeft !== null && ` (${redosLeft} left)`}
-          </button>
-        )}
-        {redosLeft === null && (
+        {image.status === 'succeeded' && !(video && isActiveStatus(video.status)) &&
+          (redo ? (
+            redo.pending ? (
+              <p className="max-w-sm rounded-2xl bg-white/[0.04] px-4 py-3 text-center text-[13px] leading-relaxed text-[color:var(--text-2)] ring-1 ring-white/[0.06]">
+                New design requested. We make it as soon as your ₹{redo.price} payment is confirmed, and it appears right here.
+              </p>
+            ) : (
+              <button className="btn-quiet h-10" onClick={() => setPaying(true)}>
+                <RotateCcw className="h-4 w-4" /> Get a new design · ₹{redo.price}
+              </button>
+            )
+          ) : (
+            onRedo && (
+              <button className="btn-quiet h-10" onClick={onRedo}>
+                <RotateCcw className="h-4 w-4" /> Try a different design
+              </button>
+            )
+          ))}
+        {!redo && (
           <button className="btn-quiet h-8 text-[12.5px] text-[color:var(--text-3)]" onClick={onDelete}>
             <Trash2 className="h-3.5 w-3.5" /> Delete this post
           </button>
         )}
       </div>
+
+      {paying && redo && (
+        <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm" onClick={() => setPaying(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Pay for a new design" onClick={(e) => e.stopPropagation()} className="glass appear w-full max-w-md rounded-[28px] p-6">
+            <h2 className="mb-1 text-[20px] font-semibold tracking-[-0.02em]">A new {image.request} design</h2>
+            <p className="mb-5 text-[13.5px] text-[color:var(--text-2)]">A completely fresh design for your business, with your logo and details.</p>
+            <PayBox
+              amount={redo.price}
+              label={`New ${image.request} design`}
+              stuck={`Hi, I paid ₹${redo.price} for a new ${image.request} design but I'm stuck`}
+              steps={[`Scan the code with any UPI app and pay ₹${redo.price}.`, 'Tap “I’ve paid”.', 'We confirm your payment and make your new design. It appears on this page.']}
+            />
+            <div className="mt-5 flex gap-2">
+              <button className="btn-quiet h-11 flex-1" onClick={() => setPaying(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn-light h-11 flex-1"
+                disabled={sending}
+                onClick={async () => {
+                  setSending(true);
+                  await redo.onRequest().catch(() => {});
+                  setSending(false);
+                  setPaying(false);
+                }}
+              >
+                {sending ? 'Sending…' : 'I’ve paid'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { AppConfig, Brand, BrandInput, BrandPostInput, CreateJobInput, Customer, Job, LogoPlace, User } from './types';
+import type { AdminRedo, AppConfig, Brand, BrandInput, BrandPostInput, CreateJobInput, Customer, Job, LogoPlace, LogoPreview, Redo, User } from './types';
 
 function brandForm(input: BrandInput) {
   const fd = new FormData();
@@ -11,6 +11,7 @@ function brandForm(input: BrandInput) {
   fd.append('colors', JSON.stringify(input.colors));
   fd.append('tagline', input.tagline);
   if (input.logo) fd.append('logo', input.logo, input.logo.name);
+  fd.append('logoBg', input.logoBg ?? 'keep');
   return fd;
 }
 
@@ -84,8 +85,33 @@ export const api = {
     });
   },
 
+  /** What's behind an uploaded logo, and how each background choice looks. */
+  previewLogo(logo: File): Promise<LogoPreview> {
+    const fd = new FormData();
+    fd.append('logo', logo, logo.name);
+    return request<LogoPreview>('/api/logo/preview', { method: 'POST', body: fd });
+  },
+
   publicStats(): Promise<{ paid: number }> {
     return request('/api/public/stats');
+  },
+
+  /** Ask for a new design of a post (paid; made once the payment is confirmed). */
+  requestRedo(jobId: string): Promise<Redo> {
+    return request<Redo>('/api/redos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId }) });
+  },
+
+  myRedos(): Promise<Redo[]> {
+    return request<Redo[]>('/api/redos');
+  },
+
+  adminRedos(): Promise<AdminRedo[]> {
+    return request<AdminRedo[]>('/api/admin/redos');
+  },
+
+  /** Payment confirmed: make the new design. */
+  approveRedo(id: string): Promise<void> {
+    return request<void>(`/api/admin/redos/${encodeURIComponent(id)}`, { method: 'POST' });
   },
 
   customers(): Promise<Customer[]> {

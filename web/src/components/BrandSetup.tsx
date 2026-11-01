@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, ImagePlus, Loader2, MessageCircle, Plus, QrCode, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ImagePlus, Loader2, Plus, X } from 'lucide-react';
 import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, api } from '../api';
-import type { Brand, Contact, User } from '../types';
+import type { Brand, Contact, LogoBg, LogoPreview, User } from '../types';
 import { APP_NAME } from '../config';
-import { OFFER, priceNow, rupees, whatsappLink } from '../offer';
+import { OFFER, priceNow, rupees } from '../offer';
+import { PayBox } from './PayBox';
 import { Logo } from './Logo';
 
 interface Props {
@@ -47,6 +48,30 @@ const BUSINESSES: [string, string][] = [
   ['Finance', 'We offer financial services'],
 ];
 
+// The white and grey versions as the server makes them (logo.js `tint`): one flat colour, with near-white
+// parts inside the logo see-through. Returns a PNG data URL.
+async function tinted(src: string, [r, g, b]: [number, number, number]) {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  const c = document.createElement('canvas');
+  [c.width, c.height] = [img.naturalWidth, img.naturalHeight];
+  const ctx = c.getContext('2d')!;
+  ctx.drawImage(img, 0, 0);
+  const d = ctx.getImageData(0, 0, c.width, c.height);
+  const px = d.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const away = 255 - Math.min(px[i], px[i + 1], px[i + 2]);
+    px[i + 3] = Math.round(px[i + 3] * Math.min(1, away / 60));
+    [px[i], px[i + 1], px[i + 2]] = [r, g, b];
+  }
+  ctx.putImageData(d, 0, 0);
+  return c.toDataURL('image/png');
+}
+
+// A checkerboard, so a see-through logo looks see-through.
+const CHECKER = { background: 'repeating-conic-gradient(#d9d9de 0% 25%, #f4f4f6 0% 50%) 50% / 16px 16px' };
+
 const input =
   'w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[16px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]';
 
@@ -65,6 +90,10 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
   const [contact, setContact] = useState<Contact>(brand?.contact ?? {});
   const [endCard, setEndCard] = useState(brand?.endCard ?? true);
   const [tagline, setTagline] = useState(brand?.tagline ?? '');
+  // A new logo: what's behind it, how each background choice looks, and the client's choice.
+  const [logoInfo, setLogoInfo] = useState<LogoPreview | null>(null);
+  const [logoBg, setLogoBg] = useState<LogoBg>('keep');
+  const [reading, setReading] = useState(false);
   const [colors, setColors] = useState<string[]>(brand?.colors?.length ? brand.colors.slice(0, 3) : ['#d4a017', '#7a1f2b', '#ffffff']);
   const [saved, setSaved] = useState<Brand | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,7 +120,27 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
     if (f.size > MAX_IMAGE_BYTES) return setError('Logo must be under 10 MB.');
     setError(null);
     setLogo(f);
+    setLogoInfo(null);
+    setLogoBg('keep');
+    setReading(true);
+    api
+      .previewLogo(f)
+      .then(setLogoInfo, () => {})
+      .finally(() => setReading(false));
   }
+
+  const shown = logoInfo?.previews[logoBg] ?? logoInfo?.previews.keep ?? preview;
+  // The white and grey versions exist once the background is see-through.
+  const seeThrough = logoInfo ? logoInfo.background === 'transparent' || logoBg !== 'keep' : false;
+  const [versions, setVersions] = useState<{ light: string; grey: string } | null>(null);
+  useEffect(() => {
+    if (!seeThrough || !shown) return setVersions(null);
+    let live = true;
+    void Promise.all([tinted(shown, [255, 255, 255]), tinted(shown, [74, 74, 79])]).then(([light, grey]) => live && setVersions({ light, grey }), () => {});
+    return () => {
+      live = false;
+    };
+  }, [seeThrough, shown]);
 
   // Typed items are added on Enter or comma; pasting "a, b, c" adds all three.
   function addFeatured(text: string) {
@@ -145,6 +194,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
       endCard: withContact && endCard,
       colors: preview ? [] : colors,
       logo,
+      logoBg,
     };
     try {
       if (signup) return onSignedUp?.(await api.signup({ ...input, ...login }));
@@ -445,8 +495,8 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
                     }}
                     className="press flex w-full items-center gap-4 rounded-2xl border border-dashed border-white/15 bg-white/[0.03] p-4 text-left hover:bg-white/[0.06]"
                   >
-                    {preview ? (
-                      <img src={preview} alt="Logo preview" className="h-14 w-20 rounded-lg bg-white/90 object-contain p-1.5" />
+                    {shown ? (
+                      <img src={shown} alt="Logo preview" className="h-14 w-20 rounded-lg bg-white/90 object-contain p-1.5" />
                     ) : (
                       <span className="grid h-14 w-14 place-items-center rounded-xl bg-white/[0.06]">
                         <ImagePlus className="h-5 w-5 text-[color:var(--text-2)]" />
@@ -459,6 +509,59 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
                     </span>
                   </button>
                 </div>
+                {reading && (
+                  <p className="flex items-center gap-2 text-[12.5px] text-[color:var(--text-2)]">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking your logo…
+                  </p>
+                )}
+                {logoInfo?.background === 'solid' && (
+                  <div className="rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/[0.06]">
+                    <p className="text-[13.5px] font-medium">Your logo has a background. Remove it?</p>
+                    <p className="mt-0.5 text-[12.5px] text-[color:var(--text-3)]">Without it, your logo sits cleanly on every post.</p>
+                    <div className="mt-3 grid place-items-center rounded-xl p-4" style={CHECKER}>
+                      <img src={shown!} alt="How your logo will look" className="max-h-20 max-w-full object-contain" />
+                    </div>
+                    <div className="seg mt-3 w-full" role="radiogroup" aria-label="Logo background">
+                      {(
+                        [
+                          ['keep', 'Keep it'],
+                          ['outer', 'Remove'],
+                          ['all', 'Remove inside too'],
+                        ] as [LogoBg, string][]
+                      ).map(([v, label]) => (
+                        <button key={v} type="button" role="radio" aria-checked={logoBg === v} className="seg-item flex-1" onClick={() => setLogoBg(v)}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {logoInfo?.background === 'transparent' && (
+                  <p className="flex items-center gap-1.5 text-[12.5px] text-[color:var(--green)]">
+                    <Check className="h-3.5 w-3.5" /> Transparent background, perfect.
+                  </p>
+                )}
+                {seeThrough && shown && versions && (
+                  <div>
+                    <p className="mb-2 text-[12.5px] text-[color:var(--text-2)]">You’ll get 3 versions to choose from on each post:</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(
+                        [
+                          ['Colour', shown, 'bg-[#f4efe6]'],
+                          ['White', versions.light, 'bg-[#1b2a4a]'],
+                          ['Grey', versions.grey, 'bg-[#fff3c4]'],
+                        ] as const
+                      ).map(([label, src, bg]) => (
+                        <div key={label} className="text-center">
+                          <div className={`grid h-14 place-items-center rounded-xl p-2 ${bg}`}>
+                            <img src={src} alt="" className="max-h-10 max-w-full object-contain" />
+                          </div>
+                          <span className="mt-1 block text-[11.5px] text-[color:var(--text-3)]">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {preview ? (
                   <p className="text-[12.5px] text-[color:var(--text-3)]">We read your brand colours from your logo.</p>
                 ) : (
@@ -482,7 +585,18 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
               </>
             )}
 
-            {key === 'pay' && <Pay />}
+            {key === 'pay' && (
+              <PayBox
+                amount={priceNow()}
+                label={OFFER.pack}
+                stuck={`Hi, I paid for the ${OFFER.pack} but I'm stuck`}
+                steps={[
+                  `Scan the code with any UPI app and pay ${rupees(priceNow())}.`,
+                  'Tap “I’ve paid” and create your login.',
+                  `We confirm your payment and your ${OFFER.pack} unlocks. You’ll see it in your account straight away.`,
+                ]}
+              />
+            )}
 
             {key === 'account' && (
               <>
@@ -567,39 +681,6 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signup, onSignedUp
           </form>
         )}
       </div>
-    </div>
-  );
-}
-
-/** The payment step. The QR code and the automatic payment check are not ready yet: this shows where they go
- *  and what happens next. Accounts are created as "payment pending" and an admin unlocks them. */
-function Pay() {
-  const wa = whatsappLink(`Hi, I paid for the ${OFFER.pack} but I'm stuck`);
-  return (
-    <div className="space-y-5">
-      <div className="mx-auto w-full max-w-[240px] rounded-3xl bg-white p-4 text-center text-black">
-        <div className="grid aspect-square place-items-center rounded-2xl border-2 border-dashed border-black/15 bg-black/[0.03]">
-          <div>
-            <QrCode className="mx-auto h-16 w-16 text-black/30" strokeWidth={1.25} />
-            <p className="mt-2 text-[12px] text-black/45">UPI QR code</p>
-          </div>
-        </div>
-        <p className="mt-3 text-[22px] font-semibold tracking-[-0.02em]">{rupees(priceNow())}</p>
-        <p className="text-[12px] text-black/55">{OFFER.pack} · Digiteq Solutions</p>
-      </div>
-      <div className="rounded-2xl bg-white/[0.04] p-4 ring-1 ring-white/[0.06]">
-        <p className="text-[13.5px] font-medium">What happens next</p>
-        <ol className="mt-2.5 space-y-2 text-[13.5px] leading-relaxed text-[color:var(--text-2)]">
-          <li className="flex gap-2.5"><span className="mono-num text-[color:var(--text)]">1</span>Scan the code with any UPI app and pay {rupees(priceNow())}.</li>
-          <li className="flex gap-2.5"><span className="mono-num text-[color:var(--text)]">2</span>Tap “I’ve paid” and create your login.</li>
-          <li className="flex gap-2.5"><span className="mono-num text-[color:var(--text)]">3</span>We confirm your payment and your {OFFER.pack} unlocks. You’ll see it in your account straight away.</li>
-        </ol>
-      </div>
-      {wa && (
-        <a href={wa} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 text-[13px] text-[color:var(--text-2)] hover:text-[color:var(--text)]">
-          <MessageCircle className="h-4 w-4" /> Paid but stuck? Message us on WhatsApp
-        </a>
-      )}
     </div>
   );
 }
