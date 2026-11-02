@@ -4,7 +4,7 @@ import {
   ShieldCheck, Sparkles, Star, Stamp, Store, Timer, Wand2,
 } from 'lucide-react';
 import { api } from '../api';
-import { APP_NAME } from '../config';
+import { APP_NAME, at } from '../config';
 import { nextDate } from '../festivals';
 import { go } from '../Gate';
 import { OFFER, launchOn, priceNow, rupees, whatsappLink } from '../offer';
@@ -25,12 +25,12 @@ const BUSINESSES = ['Jewellers', 'Sweet shops', 'Manufacturers', 'Clinics', 'Bou
 
 // Posts and videos made for our clients. `video` plays while it's on screen.
 const SAMPLES = [
-  { video: '/samples/diwali-tinita.mp4', poster: '/samples/diwali-tinita.webp', label: 'Diwali · Heat exchangers' },
-  { video: '/samples/diwali-steelcon.mp4', poster: '/samples/diwali-steelcon.webp', label: 'Diwali · Steel components' },
-  { video: '/samples/diwali-subhasri.mp4', poster: '/samples/diwali-subhasri.webp', label: 'Diwali · Pigments' },
-  { video: null, poster: '/samples/bhai-dooj-subhasri.webp', label: 'Bhai Dooj · Pigments' },
-  { video: '/samples/dussehra-subhasri.mp4', poster: '/samples/dussehra-subhasri.webp', label: 'Dussehra · Pigments' },
-  { video: '/samples/navratri-subhasri.mp4', poster: '/samples/navratri-subhasri.webp', label: 'Navratri · Pigments' },
+  { video: at('/samples/diwali-tinita.mp4'), poster: at('/samples/diwali-tinita.webp'), label: 'Diwali · Heat exchangers' },
+  { video: at('/samples/diwali-steelcon.mp4'), poster: at('/samples/diwali-steelcon.webp'), label: 'Diwali · Steel components' },
+  { video: at('/samples/diwali-subhasri.mp4'), poster: at('/samples/diwali-subhasri.webp'), label: 'Diwali · Pigments' },
+  { video: null, poster: at('/samples/bhai-dooj-subhasri.webp'), label: 'Bhai Dooj · Pigments' },
+  { video: at('/samples/dussehra-subhasri.mp4'), poster: at('/samples/dussehra-subhasri.webp'), label: 'Dussehra · Pigments' },
+  { video: at('/samples/navratri-subhasri.mp4'), poster: at('/samples/navratri-subhasri.webp'), label: 'Navratri · Pigments' },
 ];
 
 // Each sample's position in the hero fan, by its distance from the centre (others wait hidden behind).
@@ -514,7 +514,13 @@ export function Landing() {
         <Cta className="mt-8 w-full max-w-sm">
           Get my {OFFER.pack} for {rupees(price)} <ArrowRight className="h-5 w-5" />
         </Cta>
-        <p className="mt-10 text-[12px] text-[color:var(--text-3)]">© {new Date().getFullYear()} Digiteq Solutions</p>
+        <p className="mt-10 text-[12px] leading-relaxed text-[color:var(--text-3)]">
+          {APP_NAME} is a product by the team behind{' '}
+          <a href="https://www.quotegen.ai" className="underline underline-offset-2 hover:text-[color:var(--text-2)]">
+            QuoteGen.ai
+          </a>
+          <br />© {new Date().getFullYear()} Digiteq Solutions
+        </p>
       </section>
 
       {/* ---- Sticky price bar (phones) and WhatsApp ---- */}

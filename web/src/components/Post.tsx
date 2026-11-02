@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ArrowLeft, Check, Download, Film, Image as ImageIcon, RotateCcw, Stamp, Trash2 } from 'lucide-react';
+import { at } from '../config';
 import { formatElapsed } from '../format';
 import { isActiveStatus, type Job, type LogoPlace, type LogoVariant, type LogoVariants } from '../types';
 import { DEFAULT_LOGO, LogoEditor } from './LogoEditor';
@@ -15,7 +16,7 @@ interface Props {
   /** Admins: make a new design right away */
   onRedo?: () => void;
   /** Customers: a new design is paid; `pending` once they've asked and are waiting for the payment to be confirmed */
-  redo?: { price: number; pending: boolean; onRequest: () => Promise<void> };
+  redo?: { price: number; online: boolean; pending: boolean; onRequest: () => Promise<void> };
   onMakeVideo: () => void;
   onDelete: () => void;
   /** Back to the customer's pack (absent for admins) */
@@ -152,7 +153,7 @@ function Media({ job, label, logos, onPlaceLogo }: { job: Job; label: string; lo
                   <Stamp className="h-4 w-4" /> {job.logo ? 'Move logo' : 'Place your logo'}
                 </button>
               )}
-              <a className={job.logo || !logoUrl ? 'btn-light h-9' : 'btn-quiet h-9'} href={`/api/jobs/${job.id}/download`} download>
+              <a className={job.logo || !logoUrl ? 'btn-light h-9' : 'btn-quiet h-9'} href={at(`/api/jobs/${job.id}/download`)} download>
                 <Download className="h-4 w-4" /> Download
               </a>
             </>
@@ -239,12 +240,25 @@ export function Post({ image, video, logos, onPlaceLogo, onRetry, onRedo, redo, 
           <div role="dialog" aria-modal="true" aria-label="Pay for a new design" onClick={(e) => e.stopPropagation()} className="glass appear w-full max-w-md rounded-[28px] p-6">
             <h2 className="mb-1 text-[20px] font-semibold tracking-[-0.02em]">A new {image.request} design</h2>
             <p className="mb-5 text-[13.5px] text-[color:var(--text-2)]">A completely fresh design for your business, with your logo and details.</p>
-            <PayBox
-              amount={redo.price}
-              label={`New ${image.request} design`}
-              stuck={`Hi, I paid ₹${redo.price} for a new ${image.request} design but I'm stuck`}
-              steps={[`Scan the code with any UPI app and pay ₹${redo.price}.`, 'Tap “I’ve paid”.', 'We confirm your payment and make your new design. It appears on this page.']}
-            />
+            {redo.online ? (
+              <div className="rounded-3xl bg-white p-5 text-center text-black">
+                <p className="text-[13px] text-black/55">New {image.request} design</p>
+                <p className="mt-1 text-[34px] font-semibold tracking-[-0.03em]">₹{redo.price}</p>
+                <p className="mt-1 text-[12.5px] text-black/55">UPI · Google Pay · PhonePe · Cards · Netbanking</p>
+              </div>
+            ) : (
+              <PayBox
+                amount={redo.price}
+                label={`New ${image.request} design`}
+                stuck={`Hi, I paid ₹${redo.price} for a new ${image.request} design but I'm stuck`}
+                steps={[`Scan the code with any UPI app and pay ₹${redo.price}.`, 'Tap “I’ve paid”.', 'We confirm your payment and make your new design. It appears on this page.']}
+              />
+            )}
+            {redo.online && (
+              <p className="mt-3 text-[12.5px] leading-relaxed text-[color:var(--text-2)]">
+                Pay on PhonePe’s secure page. Your new design starts the moment you’ve paid, right here.
+              </p>
+            )}
             <div className="mt-5 flex gap-2">
               <button className="btn-quiet h-11 flex-1" onClick={() => setPaying(false)}>
                 Cancel
@@ -259,7 +273,7 @@ export function Post({ image, video, logos, onPlaceLogo, onRetry, onRedo, redo, 
                   setPaying(false);
                 }}
               >
-                {sending ? 'Sending…' : 'I’ve paid'}
+                {sending ? (redo.online ? 'Opening payment…' : 'Sending…') : redo.online ? `Pay ₹${redo.price} securely` : 'I’ve paid'}
               </button>
             </div>
           </div>

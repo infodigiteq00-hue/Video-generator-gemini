@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, Loader2, MessageCircle, RotateCcw, UserPlus } from 'lucide-react';
+import { Check, Copy, KeyRound, Loader2, MessageCircle, RotateCcw, UserPlus } from 'lucide-react';
 import { api } from '../api';
 import type { AdminRedo, Customer } from '../types';
 
@@ -138,25 +138,118 @@ export function Customers() {
       <ul className="mt-6 divide-y divide-white/[0.06] rounded-3xl bg-white/[0.03] ring-1 ring-white/[0.06]">
         {list?.length === 0 && <li className="p-5 text-[14px] text-[color:var(--text-3)]">No customers yet.</li>}
         {list?.map((c) => (
-          <li key={c.id} className="flex flex-wrap items-center gap-3 p-4">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] font-medium">{c.business ?? 'No business yet'}</div>
-              <div className="truncate text-[12.5px] text-[color:var(--text-2)]">
-                {[c.phone, c.email].filter(Boolean).join(' · ')} · {c.posts} posts · joined {new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-              </div>
-            </div>
-            <button className={c.paid ? 'btn-quiet h-9' : 'btn-light h-9'} onClick={() => void togglePaid(c)}>
-              {c.paid ? (
-                <>
-                  <Check className="h-4 w-4 text-[color:var(--green)]" /> Paid
-                </>
-              ) : (
-                'Mark paid'
-              )}
-            </button>
-          </li>
+          <CustomerRow key={c.id} c={c} onPaid={() => void togglePaid(c)} onChanged={() => void load()} />
         ))}
       </ul>
     </div>
+  );
+}
+
+/** One customer: payment status, and login help (correct their mobile or email, or send a password reset link). */
+function CustomerRow({ c, onPaid, onChanged }: { c: Customer; onPaid: () => void; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [login, setLogin] = useState({ phone: c.phone ?? '', email: c.email ?? '' });
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [reset, setReset] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const phone = (c.phone ?? '').replace(/\D/g, '').slice(-10);
+
+  async function save() {
+    setBusy(true);
+    setNote(null);
+    try {
+      await api.updateLogin(c.id, login);
+      setNote({ ok: true, text: 'Login updated. They can log in with the new details.' });
+      onChanged();
+    } catch (e) {
+      setNote({ ok: false, text: e instanceof Error ? e.message : 'Something went wrong.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function makeReset() {
+    setBusy(true);
+    setNote(null);
+    try {
+      setReset((await api.resetLink(c.id)).url);
+    } catch (e) {
+      setNote({ ok: false, text: e instanceof Error ? e.message : 'Something went wrong.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[15px] font-medium">{c.business ?? 'No business yet'}</div>
+          <div className="truncate text-[12.5px] text-[color:var(--text-2)]">
+            {[c.phone, c.email].filter(Boolean).join(' · ')} · {c.posts} posts · joined {new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+          </div>
+        </div>
+        <button className="btn-quiet h-9" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <KeyRound className="h-4 w-4" /> Login help
+        </button>
+        <button className={c.paid ? 'btn-quiet h-9' : 'btn-light h-9'} onClick={onPaid}>
+          {c.paid ? (
+            <>
+              <Check className="h-4 w-4 text-[color:var(--green)]" /> Paid
+            </>
+          ) : (
+            'Mark paid'
+          )}
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-3 rounded-2xl bg-black/20 p-4 ring-1 ring-white/[0.06]">
+          <p className="text-[13px] text-[color:var(--text-2)]">Typed their mobile or email wrong? Correct it here.</p>
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <input className={field} type="tel" inputMode="tel" placeholder="Mobile number" value={login.phone} onChange={(e) => setLogin({ ...login, phone: e.target.value })} />
+            <input className={field} type="email" placeholder="Email" value={login.email} onChange={(e) => setLogin({ ...login, email: e.target.value })} />
+            <button className="btn-light h-11" disabled={busy} onClick={() => void save()}>
+              Save login
+            </button>
+          </div>
+          <div className="border-t border-white/[0.06] pt-3">
+            <p className="text-[13px] text-[color:var(--text-2)]">Forgot or mistyped their password? Send them a link to set a new one (works once, for 3 days).</p>
+            {!reset ? (
+              <button className="btn-quiet mt-2 h-9" disabled={busy} onClick={() => void makeReset()}>
+                <KeyRound className="h-4 w-4" /> Create password reset link
+              </button>
+            ) : (
+              <div className="mt-2 rounded-xl bg-black/30 p-3 ring-1 ring-white/[0.08]">
+                <p className="break-all font-mono text-[12px] text-[color:var(--text-2)]">{reset}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    className="btn-quiet h-9"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(reset).then(() => setCopied(true));
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                  >
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} {copied ? 'Copied' : 'Copy link'}
+                  </button>
+                  {phone.length === 10 && (
+                    <a
+                      className="btn-quiet h-9"
+                      target="_blank"
+                      rel="noreferrer"
+                      href={`https://wa.me/91${phone}?text=${encodeURIComponent(`Here's your link to set a new password for Digiteq Studio: ${reset}`)}`}
+                    >
+                      <MessageCircle className="h-4 w-4" /> Send on WhatsApp
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          {note && <p className={`text-[13px] ${note.ok ? 'text-[color:var(--green)]' : 'text-[color:var(--red)]'}`}>{note.text}</p>}
+        </div>
+      )}
+    </li>
   );
 }

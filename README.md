@@ -89,6 +89,9 @@ Veo 3.1 Lite preview was shut down by Google on 22 Oct 2026; video moved to Gemi
 
 ## Live
 
+To serve it at www.quotegen.ai/digiteqstudio (where the PhonePe account is approved), see `docs/QUOTEGEN_PROXY.md`.
+
+
 https://digiteq-studio-production.up.railway.app (Railway, see `DEPLOY.md`). Every push to `main` redeploys.
 
 ## Android app (APK)
@@ -102,10 +105,12 @@ https://digiteq-studio-production.up.railway.app (Railway, see `DEPLOY.md`). Eve
 ## Website, signup and accounts
 
 - **`/`** landing page (`web/src/components/Landing.tsx`). Price, launch end date, founding seats, WhatsApp number and customer reviews are in `web/src/offer.ts`; reviews and the seat counter stay hidden until there are real ones. The pack's festivals are in `PACK` (`server/src/index.js`) and repeated on the landing page.
-- **`/start`** signup funnel: what the business does, products, name and logo/colours, **pay** (placeholder UPI QR for now), then login + contact details. The account is created as **payment pending**: the pack stays locked until an admin marks it paid, and unlocks on the customer's screen within 15 s.
+- **`/start`** *Create your account*: the login (mobile or email, password) and the contact details for posts, with a green **Pay ₹999 & create account** button. Payment comes straight after; once it's paid the customer is signed in, answers the 3 setup questions (business, products, name and logo) and makes their posts. An account that hasn't paid yet sees *Complete your payment* every time it logs in.
+  **Online payments** (`server/src/payments.js`, PhonePe Payment Gateway, Standard Checkout v2, on the Digiteq Solutions account; set `PHONEPE_CLIENT_ID`, `PHONEPE_CLIENT_SECRET`, `PHONEPE_ENV`, and the webhook username/password): The button opens PhonePe's page and the customer comes back to `/api/pay/return`. A payment only counts once PhonePe's Order Status API says COMPLETED for the right amount; while it's pending the payment screen shows "Confirming your payment…" and checks every 3 s. The webhook (`/api/pay/webhook`) is the backup for customers who close the tab. A ₹199 redo pays the same way and its new design is made as soon as it's paid.
+  **Without keys** the payment screen shows a placeholder UPI QR and an admin marks the account paid under Customers (the customer's screen moves on within 15 s).
 - **`/login`**: email or mobile number + password. **`/invite/<token>`**: an admin's invite for someone who paid but couldn't sign up (sets a password, then the setup opens). Links last 7 days.
 - **Admin** = the account in `AUTH_EMAIL` / `AUTH_PASSWORD_HASH` (scrypt `salt:hash`). Admins see **Customers** (mark paid, create invite links) and can make posts for any festival. `AUTH_SECRET` signs the 30-day session cookie; 10 wrong tries per 15 minutes locks out an address for a while.
 - **Data:** SQLite (`node:sqlite`, built into Node) at `DATA_DIR/app.db`: accounts, invites, brands and jobs, each brand and job tagged with its account. Old `brands.json` / `jobs.json` are imported into the admin account on first start. Only `/media/uploads` and `/media/videos` are served; result files have unguessable names.
-- **Pack rules (customers):** only the pack's festivals, nothing until paid, videos for Dhanteras, Diwali and Hindu New Year (photo posts for the rest), and one design per festival. A new design costs ₹199 (`PACK.redoPrice`): the customer pays (placeholder QR for now) and taps *I've paid*, then an admin presses *Paid, make it* under Customers → New design requests and it appears in the customer's post.
+- **Pack rules (customers):** only the pack's festivals, nothing until paid, videos for Dhanteras, Diwali and Hindu New Year (photo posts for the rest), and one design per festival. A new design costs ₹199 (`PACK.redoPrice`): with online payments it's made as soon as it's paid; without, the customer taps *I've paid* and an admin presses *Paid, make it* under Customers → New design requests. Either way it appears in the customer's post.
 
 The Gemini key lives only in `server/.env` (file mode 600, git-ignored) and is used only by the server; it is never sent to the browser or the Android app.

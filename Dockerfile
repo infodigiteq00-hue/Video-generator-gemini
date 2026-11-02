@@ -14,6 +14,9 @@ RUN npm ci --prefix server --omit=dev && npm ci --prefix web
 
 COPY server server
 COPY web web
+# The path the app is served under (e.g. /digiteqstudio behind www.quotegen.ai); empty for the site root.
+ARG BASE_PATH=""
+ENV BASE_PATH=$BASE_PATH
 RUN npm run build --prefix web && rm -rf web/node_modules
 
 ENV NODE_ENV=production \

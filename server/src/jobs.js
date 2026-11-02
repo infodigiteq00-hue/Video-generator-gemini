@@ -7,7 +7,7 @@ import { omni } from './providers/omni.js';
 import { mock } from './providers/mock.js';
 import { mockImage, nanoBanana } from './providers/image.js';
 import { LOGO_VARIANTS, addEndCard, defaultPlace, getBrand, hasContact, stampBrand, writeVideoPrompt } from './brand.js';
-import { DATA_DIR, OUTPUTS_DIR, UPLOADS_DIR } from './paths.js';
+import { DATA_DIR, OUTPUTS_DIR, UPLOADS_DIR, withBase } from './paths.js';
 import { adminId } from './auth.js';
 import { collection } from './db.js';
 
@@ -59,7 +59,15 @@ export function toPublic(job, admin = false) {
   if (job.brandId && !admin) delete rest.prompt;
   const end = job.status === 'succeeded' || job.status === 'failed' ? job.updatedAt : Date.now();
   const cleanUrl = cleanPath ? `/media/videos/${path.basename(cleanPath)}` : null; // the version without the logo
-  return { ...rest, cleanUrl, makesVideo: Boolean(next), elapsedSeconds: Math.round((new Date(end) - new Date(job.createdAt)) / 1000) };
+  return {
+    ...rest,
+    imageUrl: withBase(rest.imageUrl),
+    outputUrl: withBase(rest.outputUrl),
+    videoUrl: withBase(rest.videoUrl),
+    cleanUrl: withBase(cleanUrl),
+    makesVideo: Boolean(next),
+    elapsedSeconds: Math.round((new Date(end) - new Date(job.createdAt)) / 1000),
+  };
 }
 
 // The finished image of another job, copied so deleting either job never breaks the other.

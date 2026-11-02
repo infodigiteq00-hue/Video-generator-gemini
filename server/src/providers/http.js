@@ -15,7 +15,7 @@ export async function fetchRetry(url, init = {}, { idempotent = true, attempts =
     } catch (err) {
       const code = err.cause?.code;
       const safe = idempotent || CONNECT_ERRORS.includes(code);
-      if (!safe || i >= attempts) throw new Error(`Network error talking to Google (${code || err.message}). Check the connection and try again.`);
+      if (!safe || i >= attempts) throw new Error(`Network error (${code || err.message}). Check the connection and try again.`);
       await sleep(i);
     }
   }

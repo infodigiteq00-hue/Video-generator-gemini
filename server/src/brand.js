@@ -8,6 +8,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { adminId } from './auth.js';
+import { withBase } from './paths.js';
 import { collection } from './db.js';
 import { fetchRetry } from './providers/http.js';
 import { processLogo } from './logo.js';
@@ -34,7 +35,11 @@ export function brandToPublic(b) {
   const { logoPath, logoMime, logoFiles, ...rest } = b;
   // The logo in its original colours, all white and all dark (the last two only for logos without a solid background).
   const variants = logoFiles ? Object.fromEntries(LOGO_VARIANTS.filter((v) => logoFiles[v]).map((v) => [v, mediaUrl(logoFiles[v])])) : b.logoUrl ? { color: b.logoUrl } : null;
-  return { ...rest, logoVariants: variants };
+  return {
+    ...rest,
+    logoUrl: withBase(rest.logoUrl),
+    logoVariants: variants && Object.fromEntries(Object.entries(variants).map(([k, v]) => [k, withBase(v)])),
+  };
 }
 
 // The logo file for a version, falling back to the original colours.

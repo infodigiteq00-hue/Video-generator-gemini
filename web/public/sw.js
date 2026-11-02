@@ -9,7 +9,10 @@ self.addEventListener('activate', (e) =>
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  if (e.request.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api') || url.pathname.startsWith('/media')) return;
+  const scope = new URL(self.registration.scope).pathname; // '/' or '/digiteqstudio/'
+  if (e.request.method !== 'GET' || url.origin !== location.origin || !url.pathname.startsWith(scope)) return;
+  const inApp = url.pathname.slice(scope.length);
+  if (inApp.startsWith('api') || inApp.startsWith('media')) return;
   // Network first; fall back to the last copy when offline.
   e.respondWith(
     fetch(e.request)
@@ -20,6 +23,6 @@ self.addEventListener('fetch', (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match('/'))),
+      .catch(() => caches.match(e.request).then((r) => r || caches.match(scope))),
   );
 });

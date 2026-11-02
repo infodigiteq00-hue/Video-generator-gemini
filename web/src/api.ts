@@ -1,4 +1,5 @@
-import type { AdminRedo, AppConfig, Brand, BrandInput, BrandPostInput, CreateJobInput, Customer, Job, LogoPlace, LogoPreview, Redo, User } from './types';
+import { at } from './config';
+import type { AdminRedo, AppConfig, Brand, Contact, BrandInput, BrandPostInput, CreateJobInput, Customer, Job, LogoPlace, LogoPreview, Redo, User } from './types';
 
 function brandForm(input: BrandInput) {
   const fd = new FormData();
@@ -27,7 +28,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(path, init);
+    res = await fetch(at(path), init);
   } catch {
     throw new ApiError('Can’t connect right now. Check your internet and try again.', 0);
   }
@@ -64,13 +65,36 @@ export const api = {
     });
   },
 
-  /** End of the funnel: the brand answers plus a login. Creates the account (payment pending) and signs in. */
-  signup(input: BrandInput & { email: string; phone: string; password: string }): Promise<User> {
-    const fd = brandForm(input);
-    fd.append('email', input.email);
-    fd.append('phone', input.phone);
-    fd.append('password', input.password);
-    return request<User>('/api/signup', { method: 'POST', body: fd });
+  /** "Get it now": the account first; the brand setup and payment follow in the app. */
+  signup(input: { phone: string; email: string; password: string; contact: Contact; endCard: boolean }): Promise<User> {
+    return request<User>('/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  },
+
+  getReset(token: string): Promise<{ email: string | null; phone: string | null }> {
+    return request(`/api/resets/${encodeURIComponent(token)}`);
+  },
+
+  /** Sets the new password from a reset link and signs in. */
+  acceptReset(token: string, password: string): Promise<User> {
+    return request<User>(`/api/resets/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+  },
+
+  /** Admin: correct a customer's login. */
+  updateLogin(id: string, input: { email: string; phone: string }): Promise<User> {
+    return request<User>(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Admin: a one-time link for a customer to set a new password. */
+  resetLink(id: string): Promise<{ url: string }> {
+    return request(`/api/admin/users/${encodeURIComponent(id)}/reset`, { method: 'POST' });
   },
 
   getInvite(token: string): Promise<{ email: string | null; phone: string | null }> {
@@ -92,13 +116,24 @@ export const api = {
     return request<LogoPreview>('/api/logo/preview', { method: 'POST', body: fd });
   },
 
-  publicStats(): Promise<{ paid: number }> {
+  /** Founding spots taken, whether payments go through PhonePe, and today's pack price (rupees). */
+  publicStats(): Promise<{ paid: number; online: boolean; price: number }> {
     return request('/api/public/stats');
   },
 
-  /** Ask for a new design of a post (paid; made once the payment is confirmed). */
-  requestRedo(jobId: string): Promise<Redo> {
-    return request<Redo>('/api/redos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId }) });
+  /** PhonePe's payment page for the signed-in account's pack. */
+  payPack(): Promise<{ url: string }> {
+    return request('/api/pay/pack', { method: 'POST' });
+  },
+
+  /** How the account's pack payment stands with PhonePe (checked again each time). */
+  payStatus(): Promise<{ state: 'paid' | 'failed' | 'pending' | 'none' }> {
+    return request('/api/pay/status');
+  },
+
+  /** Ask for a new design of a post: { url } is PhonePe's payment page (online payments), else a request an admin confirms. */
+  requestRedo(jobId: string): Promise<Redo | { url: string }> {
+    return request<Redo | { url: string }>('/api/redos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId }) });
   },
 
   myRedos(): Promise<Redo[]> {

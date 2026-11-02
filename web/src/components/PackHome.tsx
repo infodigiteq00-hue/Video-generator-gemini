@@ -1,6 +1,5 @@
-import { ChevronRight, Clock, Film, Image as ImageIcon, Loader2, Lock, MessageCircle, Sparkles } from 'lucide-react';
+import { ChevronRight, Film, Image as ImageIcon, Loader2, Lock, Sparkles } from 'lucide-react';
 import { nextDate, when } from '../festivals';
-import { OFFER, whatsappLink } from '../offer';
 import { isActiveStatus, type Brand, type Job, type Pack } from '../types';
 
 interface Props {
@@ -17,7 +16,6 @@ interface Props {
 
 /** A customer's home: the festivals in their pack, each with its post (or a Generate button). */
 export function PackHome({ pack, brand, paid, jobs, busy, error, onGenerate, onOpen }: Props) {
-  const wa = whatsappLink(`Hi, I paid for the ${OFFER.pack}. Can you confirm my payment?`);
   const festivals = pack.festivals
     .map((name) => ({ name, date: nextDate(name), video: pack.video.includes(name) }))
     .sort((a, b) => (a.date?.date ?? '9').localeCompare(b.date?.date ?? '9'));
@@ -31,22 +29,6 @@ export function PackHome({ pack, brand, paid, jobs, busy, error, onGenerate, onO
           {pack.festivals.length} personalised festival posts for {brand.name}, {pack.video.length} of them videos.
         </p>
       </div>
-
-      {!paid && (
-        <div className="mb-5 rounded-3xl bg-[color:var(--amber)]/10 p-4 ring-1 ring-[color:var(--amber)]/25">
-          <p className="flex items-center gap-2 text-[14.5px] font-medium text-[color:var(--amber)]">
-            <Clock className="h-4 w-4" /> Confirming your payment
-          </p>
-          <p className="mt-1 text-[13.5px] leading-relaxed text-[color:var(--text-2)]">
-            Your posts unlock here as soon as your payment is confirmed. Keep this page open, or come back later.
-          </p>
-          {wa && (
-            <a href={wa} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[color:var(--text)] underline underline-offset-4">
-              <MessageCircle className="h-4 w-4" /> Paid but stuck? Message us
-            </a>
-          )}
-        </div>
-      )}
 
       <ol className="space-y-2.5">
         {festivals.map((f) => {

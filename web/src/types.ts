@@ -109,6 +109,9 @@ export interface User {
   /** Payment confirmed: the pack is unlocked */
   paid: boolean;
   createdAt: string;
+  /** Contact details for posts given when signing up, until the brand setup takes them over */
+  contact?: Contact;
+  endCard?: boolean;
 }
 
 export interface Customer extends User {

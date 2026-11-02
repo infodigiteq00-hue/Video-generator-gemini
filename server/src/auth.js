@@ -1,4 +1,4 @@
-// Accounts: customers sign up after the funnel (or from an admin's invite link) and log in with their email
+// Accounts: customers sign up from the landing page (or an admin's invite link) and log in with their email
 // or phone number and a password. The account in AUTH_EMAIL / AUTH_PASSWORD_HASH (server/.env) is the admin.
 // AUTH_SECRET signs the session cookie.
 import crypto from 'node:crypto';
@@ -63,12 +63,17 @@ const findUser = (login) =>
     ? db.prepare('SELECT * FROM users WHERE email = ?').get(normEmail(login))
     : db.prepare('SELECT * FROM users WHERE phone = ?').get(normPhone(login));
 
-export const toPublicUser = (u) => ({ id: u.id, email: u.email, phone: u.phone, role: u.role, paid: Boolean(u.paid), createdAt: u.createdAt });
+export const toPublicUser = (u) => ({
+  id: u.id, email: u.email, phone: u.phone, role: u.role, paid: Boolean(u.paid), createdAt: u.createdAt,
+  // The contact details for posts given when signing up, until the brand setup takes them over.
+  ...(u.profile ? JSON.parse(u.profile) : {}),
+});
 export const listUsers = () => db.prepare('SELECT * FROM users ORDER BY createdAt DESC').all();
 export const setPaid = (id, paid) => db.prepare('UPDATE users SET paid = ? WHERE id = ?').run(paid ? 1 : 0, id);
 export const paidCount = () => db.prepare("SELECT COUNT(*) AS n FROM users WHERE paid = 1 AND role = 'customer'").get().n;
 
-export function createUser({ email, phone, password, paid = false }) {
+// `profile`: { contact, endCard } from the signup form, used by the brand setup.
+export function createUser({ email, phone, password, paid = false, profile = null }) {
   email = normEmail(email);
   phone = normPhone(phone);
   if (!email && !phone) throw new AuthError('Enter your email or mobile number');
@@ -77,9 +82,12 @@ export function createUser({ email, phone, password, paid = false }) {
   if (String(password || '').length < 6) throw new AuthError('Use a password of at least 6 characters');
   if (email && findUser(email)) throw new AuthError('An account with this email already exists. Log in instead.');
   if (phone && findUser(phone)) throw new AuthError('An account with this mobile number already exists. Log in instead.');
-  const user = { id: crypto.randomUUID(), email, phone, password: hashPassword(password), role: 'customer', paid: paid ? 1 : 0, createdAt: new Date().toISOString() };
-  db.prepare('INSERT INTO users (id, email, phone, password, role, paid, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-    user.id, user.email, user.phone, user.password, user.role, user.paid, user.createdAt,
+  const user = {
+    id: crypto.randomUUID(), email, phone, password: hashPassword(password), role: 'customer', paid: paid ? 1 : 0,
+    createdAt: new Date().toISOString(), profile: profile ? JSON.stringify(profile) : null,
+  };
+  db.prepare('INSERT INTO users (id, email, phone, password, role, paid, createdAt, profile) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    user.id, user.email, user.phone, user.password, user.role, user.paid, user.createdAt, user.profile,
   );
   return user;
 }
@@ -116,6 +124,40 @@ function getInvite(token) {
   const inv = db.prepare('SELECT * FROM invites WHERE token = ?').get(String(token || ''));
   if (!inv || inv.usedAt || Date.now() - Date.parse(inv.createdAt) > INVITE_DAYS * 86400000) return null;
   return inv;
+}
+
+// ---- Login help (admin → a customer who typed the wrong mobile, email or password) ----
+
+const RESET_DAYS = 3;
+
+/** Corrects an account's login: `email` and `phone` as typed (either may be blank, not both). */
+export function updateLogin(id, { email, phone }) {
+  const user = getUser(id);
+  if (!user) throw new AuthError('Account not found');
+  email = normEmail(email);
+  phone = normPhone(phone);
+  if (!email && !phone) throw new AuthError('Keep an email or a mobile number to log in with');
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new AuthError('That email address doesn’t look right');
+  if (phone && phone.length !== 10) throw new AuthError('Enter a 10 digit mobile number');
+  const other = (u) => u && u.id !== id;
+  if (email && other(findUser(email))) throw new AuthError('Another account already uses this email');
+  if (phone && other(findUser(phone))) throw new AuthError('Another account already uses this mobile number');
+  db.prepare('UPDATE users SET email = ?, phone = ? WHERE id = ?').run(email, phone, id);
+  return getUser(id);
+}
+
+/** A one-time link for an account to set a new password (it signs them in). */
+export function createReset(userId) {
+  if (!getUser(userId)) throw new AuthError('Account not found');
+  const token = crypto.randomBytes(24).toString('base64url');
+  db.prepare('INSERT INTO resets (token, userId, createdAt) VALUES (?, ?, ?)').run(token, userId, new Date().toISOString());
+  return token;
+}
+
+function getReset(token) {
+  const r = db.prepare('SELECT * FROM resets WHERE token = ?').get(String(token || ''));
+  if (!r || r.usedAt || Date.now() - Date.parse(r.createdAt) > RESET_DAYS * 86400000) return null;
+  return getUser(r.userId) ? r : null;
 }
 
 // ---- Routes ----
@@ -170,6 +212,23 @@ export function mountAuth(app) {
     res.json({ email: inv.email, phone: inv.phone });
   });
 
+  app.get('/api/resets/:token', (req, res) => {
+    const r = getReset(req.params.token);
+    if (!r) return res.status(404).json({ error: 'This link has expired or was already used. Ask us for a new one.' });
+    const u = getUser(r.userId);
+    res.json({ email: u.email, phone: u.phone });
+  });
+
+  app.post('/api/resets/:token', json, (req, res) => {
+    const r = getReset(req.params.token);
+    if (!r) return res.status(404).json({ error: 'This link has expired or was already used. Ask us for a new one.' });
+    if (String(req.body?.password || '').length < 6) return res.status(400).json({ error: 'Use a password of at least 6 characters' });
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashPassword(req.body.password), r.userId);
+    db.prepare('UPDATE resets SET usedAt = ? WHERE token = ?').run(new Date().toISOString(), r.token);
+    startSession(req, res, r.userId);
+    res.json(toPublicUser(getUser(r.userId)));
+  });
+
   // Accepting an invite creates a paid account; the brand setup then opens on first login.
   app.post('/api/invites/:token', json, (req, res) => {
     const inv = getInvite(req.params.token);
@@ -188,10 +247,10 @@ export function mountAuth(app) {
 
 // Everything under /api needs a session, except signing up and in, the landing page's numbers, and what the
 // ChatGPT player needs (it polls a job by its unguessable id from outside the app, where there is no cookie).
-const OPEN = ['/api/login', '/api/logout', '/api/me', '/api/signup', '/api/public/stats', '/api/logo/preview'];
+const OPEN = ['/api/login', '/api/logout', '/api/me', '/api/signup', '/api/public/stats', '/api/pay/return', '/api/pay/webhook'];
 export function requireAuth(req, res, next) {
   const p = req.originalUrl.split('?')[0]; // req.path is relative to where this is mounted
-  const open = OPEN.includes(p) || p.startsWith('/api/invites/') || (req.method === 'GET' && /^\/api\/jobs\/[\w-]+$/.test(p));
+  const open = OPEN.includes(p) || p.startsWith('/api/invites/') || p.startsWith('/api/resets/') || (req.method === 'GET' && /^\/api\/jobs\/[\w-]+$/.test(p));
   if (open) return next();
   req.user = sessionUser(req);
   if (req.user) return next();

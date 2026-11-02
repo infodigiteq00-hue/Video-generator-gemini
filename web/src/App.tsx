@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Menu, Sparkles, SquarePen } from 'lucide-react';
 import { api } from './api';
-import { APP_NAME } from './config';
+import { APP_NAME, at } from './config';
+import { priceNow } from './offer';
 import { upcoming, when } from './festivals';
 import { useJobs } from './hooks/useJobs';
 import type { AppConfig, Brand, Job, LogoPlace, PageId, Provider, Redo, User } from './types';
 import { BrandSetup } from './components/BrandSetup';
 import { Customers } from './components/Customers';
 import { PackHome } from './components/PackHome';
+import { PayScreen } from './components/PayScreen';
 import { FilmWall } from './components/FilmWall';
 import { Logo } from './components/Logo';
 import { Post, Waiting } from './components/Post';
@@ -24,6 +26,10 @@ export default function App({ user }: { user: User }) {
   const admin = user.role === 'admin';
   const [paid, setPaid] = useState(user.paid);
   const [redos, setRedos] = useState<Redo[]>([]);
+  const [online, setOnline] = useState(false);
+  const [price, setPrice] = useState<number | null>(null);
+  // The pack payment: 'wait' while PhonePe confirms it after the customer comes back, 'failed' if it didn't go through.
+  const [payment, setPayment] = useState<'wait' | 'failed' | null>(null);
   const [page, setPage] = useState<PageId>('chat');
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [offline, setOffline] = useState<string | null>(null);
@@ -56,7 +62,41 @@ export default function App({ user }: { user: User }) {
   useEffect(() => {
     if (admin) return;
     void api.myRedos().then(setRedos, () => {});
+    void api.publicStats().then((s) => {
+      setOnline(s.online);
+      setPrice(s.price);
+    }, () => {});
   }, [admin]);
+
+  // Back from PhonePe. A new design (/?post=<chatId>): open that post, the design is already on its way.
+  // The pack (/?paid=1|0|wait): confirm it with PhonePe and unlock.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const post = q.get('post');
+    if (post) setChatId(post);
+    else if (q.get('paid') === '0') setPayment('failed');
+    else if (q.get('paid') && !user.paid) setPayment('wait');
+    if (location.search) history.replaceState(null, '', at('/'));
+  }, [user.paid]);
+  useEffect(() => {
+    if (payment !== 'wait') return;
+    const tick = () =>
+      void api.payStatus().then((r) => {
+        if (r.state === 'paid') [setPaid(true), setPayment(null)];
+        if (r.state === 'failed') setPayment('failed');
+      }, () => {});
+    tick();
+    const t = setInterval(tick, 3000);
+    return () => clearInterval(t);
+  }, [payment]);
+
+  async function pay() {
+    try {
+      location.href = (await api.payPack()).url;
+    } catch (e) {
+      setOffline(e instanceof Error ? e.message : 'Something went wrong.');
+    }
+  }
   useEffect(() => {
     if (!redos.length) return;
     const t = setInterval(() => {
@@ -119,6 +159,19 @@ export default function App({ user }: { user: User }) {
   }
 
   if (!brandLoaded) return null;
+  // Order for customers: account → payment → business details → posts.
+  if (!admin && !paid) {
+    return (
+      <PayScreen
+        pack={config?.pack ?? { name: 'Diwali Pack', festivals: [], video: [], designs: 1, redoPrice: 199 }}
+        online={online}
+        price={price ?? priceNow()}
+        state={payment}
+        error={offline}
+        onPay={pay}
+      />
+    );
+  }
   if (!brand) {
     return (
       <BrandSetup
@@ -126,6 +179,7 @@ export default function App({ user }: { user: User }) {
         brand={null}
         onClose={() => {}}
         onSaved={setBrand}
+        signupContact={user.contact ? { contact: user.contact, endCard: user.endCard ?? true } : undefined}
       />
     );
   }
@@ -200,9 +254,11 @@ export default function App({ user }: { user: User }) {
                   ? undefined
                   : {
                       price: config?.pack.redoPrice ?? 199,
+                      online,
                       pending: redos.some((r) => r.chatId === image.chatId),
                       onRequest: async () => {
                         const r = await api.requestRedo(image.id);
+                        if ('url' in r) return void (location.href = r.url);
                         setRedos((list) => [...list.filter((x) => x.id !== r.id), r]);
                       },
                     }
@@ -220,7 +276,16 @@ export default function App({ user }: { user: User }) {
           <div className="relative isolate flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-8">
             <div className="aurora -z-10" />
             {config && (
-              <PackHome pack={config.pack} brand={brand} paid={paid} jobs={jobs} busy={Boolean(busy)} error={offline} onGenerate={(f) => void generate({ request: f })} onOpen={open} />
+              <PackHome
+                pack={config.pack}
+                brand={brand}
+                paid={paid}
+                jobs={jobs}
+                busy={Boolean(busy)}
+                error={offline}
+                onGenerate={(f) => void generate({ request: f })}
+                onOpen={open}
+              />
             )}
           </div>
         ) : (

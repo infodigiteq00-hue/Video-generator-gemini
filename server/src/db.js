@@ -1,4 +1,4 @@
-// SQLite database on the data volume (built into Node): accounts, invites, brands and jobs.
+// SQLite database on the data volume (built into Node): accounts, invites, payments, redos, brands and jobs.
 // Brands and jobs are stored whole as JSON, tagged with the account they belong to.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,9 +13,16 @@ db.exec(`
     role TEXT NOT NULL DEFAULT 'customer', paid INTEGER NOT NULL DEFAULT 0, createdAt TEXT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS invites (token TEXT PRIMARY KEY, email TEXT, phone TEXT, createdAt TEXT NOT NULL, usedAt TEXT);
+  CREATE TABLE IF NOT EXISTS resets (token TEXT PRIMARY KEY, userId TEXT NOT NULL, createdAt TEXT NOT NULL, usedAt TEXT);
   CREATE TABLE IF NOT EXISTS redos (id TEXT PRIMARY KEY, userId TEXT NOT NULL, jobId TEXT NOT NULL, chatId TEXT, festival TEXT NOT NULL, status TEXT NOT NULL, createdAt TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS payments (
+    id TEXT PRIMARY KEY, kind TEXT NOT NULL, ref TEXT NOT NULL, amount INTEGER NOT NULL, linkId TEXT, status TEXT NOT NULL,
+    paymentId TEXT, createdAt TEXT NOT NULL, paidAt TEXT
+  );
   CREATE TABLE IF NOT EXISTS docs (kind TEXT NOT NULL, id TEXT NOT NULL, userId TEXT, data TEXT NOT NULL, PRIMARY KEY (kind, id));
 `);
+// Contact details given when signing up, kept until the brand setup (JSON). Added after launch, so older databases get it here.
+if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'profile')) db.exec('ALTER TABLE users ADD COLUMN profile TEXT');
 
 // A collection of JSON documents ("brands", "jobs"). On first run, imports the old <kind>.json file
 // and gives its records to `owner` (the admin), so nothing made before accounts existed is lost.
