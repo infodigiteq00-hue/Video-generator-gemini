@@ -3,6 +3,7 @@ import { ChevronDown, Menu, Sparkles, SquarePen } from 'lucide-react';
 import { api } from './api';
 import { APP_NAME, at } from './config';
 import { priceNow } from './offer';
+import { pixelFlush, setPixelUser, trackPixel } from './metaPixel';
 import { upcoming, when } from './festivals';
 import { useJobs } from './hooks/useJobs';
 import type { AppConfig, Brand, Job, LogoPlace, PageId, Provider, Redo, User } from './types';
@@ -25,6 +26,11 @@ const FORMAT = { aspectRatio: '9:16', imageSize: '2K', resolution: '720p', durat
 export default function App({ user }: { user: User }) {
   const admin = user.role === 'admin';
   const [paid, setPaid] = useState(user.paid);
+  // The pack is paid: unlock it and count the sale for Meta (once per customer, however we found out).
+  const unlock = (amount?: number) => {
+    setPaid(true);
+    trackPixel('Purchase', { content_name: 'Diwali Pack', value: amount ?? price ?? priceNow(), currency: 'INR', num_items: 1 }, { once: `pack-${user.id}` });
+  };
   const [redos, setRedos] = useState<Redo[]>([]);
   const [online, setOnline] = useState(false);
   const [price, setPrice] = useState<number | null>(null);
@@ -43,6 +49,10 @@ export default function App({ user }: { user: User }) {
   const { jobs, upsert, remove, refresh } = useJobs();
   const festivals = useMemo(upcoming, []);
   const [festival, setFestival] = useState(festivals.suggested?.name ?? 'Diwali');
+
+  useEffect(() => {
+    if (!admin) setPixelUser(user);
+  }, [admin, user]);
 
   useEffect(() => {
     api
@@ -73,16 +83,20 @@ export default function App({ user }: { user: User }) {
   useEffect(() => {
     const q = new URLSearchParams(location.search);
     const post = q.get('post');
-    if (post) setChatId(post);
-    else if (q.get('paid') === '0') setPayment('failed');
+    if (post) {
+      setChatId(post);
+      if (q.get('paid') === '1') trackPixel('Purchase', { content_name: 'New design', value: 199, currency: 'INR', num_items: 1 });
+    } else if (q.get('paid') === '0') setPayment('failed');
     else if (q.get('paid') && !user.paid) setPayment('wait');
+    // Back from PhonePe already confirmed: the sale still counts.
+    else if (q.get('paid') && !admin) void api.payStatus().then((r) => r.state === 'paid' && unlock(r.amount), () => {});
     if (location.search) history.replaceState(null, '', at('/'));
   }, [user.paid]);
   useEffect(() => {
     if (payment !== 'wait') return;
     const tick = () =>
       void api.payStatus().then((r) => {
-        if (r.state === 'paid') [setPaid(true), setPayment(null)];
+        if (r.state === 'paid') [unlock(r.amount), setPayment(null)];
         if (r.state === 'failed') setPayment('failed');
       }, () => {});
     tick();
@@ -92,7 +106,10 @@ export default function App({ user }: { user: User }) {
 
   async function pay() {
     try {
-      location.href = (await api.payPack()).url;
+      const { url } = await api.payPack();
+      trackPixel('AddPaymentInfo', { content_name: 'Diwali Pack', value: price ?? priceNow(), currency: 'INR' });
+      await pixelFlush();
+      location.href = url;
     } catch (e) {
       setOffline(e instanceof Error ? e.message : 'Something went wrong.');
     }
@@ -112,7 +129,7 @@ export default function App({ user }: { user: User }) {
   // paid but closed PhonePe before coming back, or our team confirmed it.
   useEffect(() => {
     if (paid || admin) return;
-    const tick = () => void api.payStatus().then((r) => r.state === 'paid' && setPaid(true), () => {});
+    const tick = () => void api.payStatus().then((r) => r.state === 'paid' && unlock(r.amount), () => {});
     tick();
     const t = setInterval(tick, 15000);
     return () => clearInterval(t);
@@ -146,6 +163,7 @@ export default function App({ user }: { user: User }) {
       });
       upsert(job);
       if (job.chatId) setChatId(job.chatId);
+      if (!admin) trackPixel('PostCreated', { festival: input.request ?? '' }, { once: user.id, custom: true });
     } catch (e) {
       setOffline(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
@@ -181,7 +199,10 @@ export default function App({ user }: { user: User }) {
         asPage
         brand={null}
         onClose={() => {}}
-        onSaved={setBrand}
+        onSaved={(b) => {
+          if (!admin) trackPixel('CompleteRegistration', { content_name: 'Business setup', status: 'complete' }, { once: user.id });
+          setBrand(b);
+        }}
         signupContact={user.contact ? { contact: user.contact, endCard: user.endCard ?? true } : undefined}
       />
     );
@@ -261,7 +282,11 @@ export default function App({ user }: { user: User }) {
                       pending: redos.some((r) => r.chatId === image.chatId),
                       onRequest: async () => {
                         const r = await api.requestRedo(image.id);
-                        if ('url' in r) return void (location.href = r.url);
+                        if ('url' in r) {
+                          trackPixel('AddPaymentInfo', { content_name: 'New design', value: 199, currency: 'INR' });
+                          await pixelFlush();
+                          return void (location.href = r.url);
+                        }
                         setRedos((list) => [...list.filter((x) => x.id !== r.id), r]);
                       },
                     }

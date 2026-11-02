@@ -9,6 +9,7 @@ import { nextDate } from '../festivals';
 import { go } from '../Gate';
 import { OFFER, launchOn, priceNow, rupees, whatsappLink } from '../offer';
 import { Support } from './Support';
+import { trackPixel } from '../metaPixel';
 import { Logo } from './Logo';
 
 // Keep in step with PACK in server/src/index.js.
@@ -185,6 +186,7 @@ export function Landing() {
 
   useEffect(() => {
     api.publicStats().then((s) => setTaken(s.paid), () => {});
+    trackPixel('ViewContent', { content_name: OFFER.pack, value: priceNow(), currency: 'INR' });
   }, []);
 
   // The sticky price bar appears once the hero's button has scrolled out of view.

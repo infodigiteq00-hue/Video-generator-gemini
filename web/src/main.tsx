@@ -2,9 +2,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Gate } from './Gate';
 import { APP_NAME } from './config';
+import { initMetaPixel } from './metaPixel';
 import './index.css';
 
 document.title = APP_NAME;
+initMetaPixel();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

@@ -217,10 +217,12 @@ app.get('/api/pay/return', async (req, res) => {
 
 // While PhonePe is still confirming the pack payment, the app asks here every few seconds.
 app.get('/api/pay/status', async (req, res) => {
-  if (req.user.paid) return res.json({ state: 'paid' });
   const row = db.prepare("SELECT * FROM payments WHERE kind = 'pack' AND ref = ? ORDER BY createdAt DESC").get(req.user.id);
+  // `amount` (rupees) once paid online, for the app's sale tracking.
+  if (req.user.paid) return res.json({ state: 'paid', amount: row?.status === 'paid' ? row.amount : undefined });
   if (!row) return res.json({ state: 'none' });
-  res.json({ state: await check(row).catch(() => 'pending') });
+  const state = await check(row).catch(() => 'pending');
+  res.json({ state, amount: state === 'paid' ? row.amount : undefined });
 });
 
 // The backup: PhonePe calls this when a payment completes, even if the customer closed the tab.

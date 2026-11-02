@@ -127,7 +127,7 @@ export const api = {
   },
 
   /** How the account's pack payment stands with PhonePe (checked again each time). */
-  payStatus(): Promise<{ state: 'paid' | 'failed' | 'pending' | 'none' }> {
+  payStatus(): Promise<{ state: 'paid' | 'failed' | 'pending' | 'none'; amount?: number }> {
     return request('/api/pay/status');
   },
 

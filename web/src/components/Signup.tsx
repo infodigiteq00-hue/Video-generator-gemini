@@ -7,6 +7,7 @@ import { OFFER, priceNow, rupees } from '../offer';
 import type { Contact, User } from '../types';
 import { Logo } from './Logo';
 import { Support } from './Support';
+import { pixelFlush, setPixelUser, trackPixel } from '../metaPixel';
 
 const input =
   'w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[16px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]';
@@ -22,6 +23,7 @@ export function Signup({ onSignedIn }: { onSignedIn: (u: User) => void }) {
   const [pay, setPay] = useState({ online: false, price: priceNow() });
   useEffect(() => {
     void api.publicStats().then((s) => setPay({ online: s.online, price: s.price }), () => {});
+    trackPixel('InitiateCheckout', { content_name: OFFER.pack, value: priceNow(), currency: 'INR', num_items: 1 });
     // Back from PhonePe without paying: the browser may show this form as it was. The account exists now, so reload
     // into the app, which shows the payment screen.
     const back = (e: PageTransitionEvent) => e.persisted && location.reload();
@@ -36,11 +38,17 @@ export function Signup({ onSignedIn }: { onSignedIn: (u: User) => void }) {
     setError(null);
     try {
       const user = await api.signup({ ...login, contact, endCard });
+      setPixelUser(user);
+      trackPixel('Lead', { content_name: OFFER.pack, value: pay.price, currency: 'INR' }, { once: user.id });
       // Online: on to PhonePe now (staying busy while it opens). If that can't open (or payments are manual), the
       // app shows the payment screen.
       if (pay.online) {
         const url = await api.payPack().then((r) => r.url, () => null);
-        if (url) return void (location.href = url);
+        if (url) {
+          trackPixel('AddPaymentInfo', { content_name: OFFER.pack, value: pay.price, currency: 'INR' });
+          await pixelFlush();
+          return void (location.href = url);
+        }
       }
       onSignedIn(user);
     } catch (e) {
