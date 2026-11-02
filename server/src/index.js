@@ -70,7 +70,9 @@ app.set('trust proxy', trust === undefined ? 'loopback' : /^\d+$/.test(trust) ? 
 // route below works the same with or without it.
 app.use((req, _res, next) => {
   if (BASE && (req.url === BASE || req.url.startsWith(`${BASE}/`) || req.url.startsWith(`${BASE}?`))) {
-    req.url = req.url.slice(BASE.length) || '/';
+    // '/digiteqstudio?fbclid=…' (as ads link it) becomes '/?fbclid=…': a path must stay, or Express can't route it.
+    const rest = req.url.slice(BASE.length);
+    req.url = rest.startsWith('/') ? rest : `/${rest}`;
     req.originalUrl = req.url; // what the sign-in check reads
   }
   next();
