@@ -18,6 +18,7 @@ import { BrandError, brandOf, brandToPublic, getBrand, imagePrompt, saveBrand, w
 import { db } from './db.js';
 import { previewLogo } from './logo.js';
 import { checkPayment, createPayment, getPayment, onlinePayments, webhookOrder } from './payments.js';
+import { clickInfo, reportPurchase } from './meta.js';
 import { BASE_PATH, OUTPUTS_DIR } from './paths.js';
 
 // The Diwali Pack: what a paying customer can make. Admins can make anything.
@@ -180,7 +181,7 @@ app.post('/api/pay/pack', async (req, res) => {
   if (req.user.paid) return res.status(400).json({ error: 'Your pack is already unlocked' });
   if (!onlinePayments()) return res.status(400).json({ error: 'Online payments are not set up' });
   try {
-    res.json({ url: await createPayment({ kind: 'pack', ref: req.user.id, amount: packPrice(), returnUrl: `${origin(req)}/api/pay/return` }) });
+    res.json({ url: await createPayment({ kind: 'pack', ref: req.user.id, amount: packPrice(), returnUrl: `${origin(req)}/api/pay/return`, click: clickInfo(req) }) });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
@@ -196,11 +197,25 @@ function redoPaid(redoId) {
   if (user && brand) newDesign(user, brand, r.festival, r.chatId);
 }
 
-// Checks a payment with PhonePe; the first time it turns out paid, acts on it (once): unlocks the pack, or makes the redo.
+// A confirmed sale, reported to Meta from here too. Same event ID as the app's pixel Purchase, so Meta counts it once.
+function reportSale(row) {
+  const userId = row.kind === 'pack' ? row.ref : db.prepare('SELECT userId FROM redos WHERE id = ?').get(row.ref)?.userId;
+  void reportPurchase({
+    eventId: row.kind === 'pack' ? `Purchase-pack-${row.ref}` : `Purchase-redo-${row.id}`,
+    value: row.amount,
+    contentName: row.kind === 'pack' ? PACK.name : 'New design',
+    user: listUsers().find((u) => u.id === userId),
+    click: row.meta ? JSON.parse(row.meta) : null,
+  });
+}
+
+// Checks a payment with PhonePe; the first time it turns out paid, acts on it (once): unlocks the pack, or makes the
+// redo, and reports the sale to Meta.
 async function check(row) {
   const result = await checkPayment(row.id);
   if (result.fresh && row.kind === 'pack') setPaid(row.ref, true);
   if (result.fresh && row.kind === 'redo') redoPaid(row.ref);
+  if (result.fresh) reportSale(row);
   return result.state;
 }
 
@@ -212,7 +227,7 @@ app.get('/api/pay/return', async (req, res) => {
   const flag = state === 'paid' ? 1 : state === 'failed' ? 0 : 'wait';
   if (row.kind === 'pack') return res.redirect(`${BASE}/?paid=${flag}`);
   const redo = db.prepare('SELECT chatId FROM redos WHERE id = ?').get(row.ref);
-  res.redirect(`${BASE}/?post=${encodeURIComponent(redo?.chatId ?? '')}&paid=${flag}`);
+  res.redirect(`${BASE}/?post=${encodeURIComponent(redo?.chatId ?? '')}&paid=${flag}&order=${row.id}`);
 });
 
 // While PhonePe is still confirming the pack payment, the app asks here every few seconds.
@@ -368,7 +383,7 @@ app.post('/api/redos', express.json(), async (req, res) => {
       id, req.user.id, job.id, job.chatId, job.request, new Date().toISOString(),
     );
     try {
-      const url = await createPayment({ kind: 'redo', ref: id, amount: PACK.redoPrice, returnUrl: `${origin(req)}/api/pay/return` });
+      const url = await createPayment({ kind: 'redo', ref: id, amount: PACK.redoPrice, returnUrl: `${origin(req)}/api/pay/return`, click: clickInfo(req) });
       return res.json({ url });
     } catch (err) {
       return res.status(502).json({ error: err.message });

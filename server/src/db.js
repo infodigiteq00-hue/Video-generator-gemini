@@ -23,6 +23,8 @@ db.exec(`
 `);
 // Contact details given when signing up, kept until the brand setup (JSON). Added after launch, so older databases get it here.
 if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'profile')) db.exec('ALTER TABLE users ADD COLUMN profile TEXT');
+// Meta's cookies, IP and browser from when a payment started (JSON), to report the sale to Meta (see meta.js).
+if (!db.prepare('PRAGMA table_info(payments)').all().some((c) => c.name === 'meta')) db.exec('ALTER TABLE payments ADD COLUMN meta TEXT');
 
 // A collection of JSON documents ("brands", "jobs"). On first run, imports the old <kind>.json file
 // and gives its records to `owner` (the admin), so nothing made before accounts existed is lost.

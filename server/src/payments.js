@@ -53,8 +53,9 @@ export const getPayment = (id) => db.prepare('SELECT * FROM payments WHERE id = 
 /**
  * Starts a payment of `amount` rupees. `kind` is 'pack' (ref = the account) or 'redo' (ref = the redo request).
  * PhonePe sends the customer back to `returnUrl?order=<id>` afterwards. Returns PhonePe's payment page.
+ * `click` is kept to report the sale to Meta later (meta.js).
  */
-export async function createPayment({ kind, ref, amount, returnUrl }) {
+export async function createPayment({ kind, ref, amount, returnUrl, click }) {
   const id = crypto.randomUUID(); // PhonePe's merchantOrderId too, so the return and the webhook find this row
   const order = await phonepe('POST', '/checkout/v2/pay', {
     merchantOrderId: id,
@@ -63,8 +64,8 @@ export async function createPayment({ kind, ref, amount, returnUrl }) {
     metaInfo: { udf1: kind, udf2: ref },
     paymentFlow: { type: 'PG_CHECKOUT', merchantUrls: { redirectUrl: `${returnUrl}?order=${id}` } },
   });
-  db.prepare("INSERT INTO payments (id, kind, ref, amount, linkId, status, createdAt) VALUES (?, ?, ?, ?, ?, 'created', ?)").run(
-    id, kind, ref, amount, order.orderId ?? null, new Date().toISOString(),
+  db.prepare("INSERT INTO payments (id, kind, ref, amount, linkId, status, createdAt, meta) VALUES (?, ?, ?, ?, ?, 'created', ?, ?)").run(
+    id, kind, ref, amount, order.orderId ?? null, new Date().toISOString(), click ? JSON.stringify(click) : null,
   );
   return order.redirectUrl;
 }

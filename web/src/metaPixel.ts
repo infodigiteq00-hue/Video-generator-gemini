@@ -1,6 +1,6 @@
-// Meta Pixel for the Digiteq Studio funnel: PageView everywhere, then ViewContent (landing) → InitiateCheckout (create
-// account page) → Lead (account created) → AddPaymentInfo (PhonePe opens) → Purchase (payment confirmed) →
-// CompleteRegistration (business set up) → PostCreated (first post, custom).
+// Meta Pixel for Digiteq Studio: PageView on every page, and Purchase when a payment is confirmed (the pack, or a new
+// design). Checkout and add-to-cart come from triggers set up in Meta's Events Manager, not from here. The server also
+// reports each sale (Conversions API, server/src/meta.js) with the same event ID, so Meta counts it once.
 // Only production builds send events. VITE_META_PIXEL_ID overrides the ID; 'debug' records events in
 // window.__pixel (kept in sessionStorage) instead of sending them, for testing.
 
@@ -86,6 +86,3 @@ export function trackPixel(event: string, params: Record<string, unknown> = {}, 
   if (once && !firstTime(`${event}:${once}`)) return;
   window.fbq(custom ? 'trackCustom' : 'track', event, params, once ? { eventID: `${event}-${once}`.slice(0, 128) } : undefined);
 }
-
-/** Before leaving the page (to PhonePe): a moment for the last event to go out. */
-export const pixelFlush = () => new Promise((r) => setTimeout(r, PIXEL_ID ? 400 : 0));

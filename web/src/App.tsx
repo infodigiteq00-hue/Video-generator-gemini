@@ -3,7 +3,7 @@ import { ChevronDown, Menu, Sparkles, SquarePen } from 'lucide-react';
 import { api } from './api';
 import { APP_NAME, at } from './config';
 import { priceNow } from './offer';
-import { pixelFlush, setPixelUser, trackPixel } from './metaPixel';
+import { setPixelUser, trackPixel } from './metaPixel';
 import { upcoming, when } from './festivals';
 import { useJobs } from './hooks/useJobs';
 import type { AppConfig, Brand, Job, LogoPlace, PageId, Provider, Redo, User } from './types';
@@ -26,7 +26,8 @@ const FORMAT = { aspectRatio: '9:16', imageSize: '2K', resolution: '720p', durat
 export default function App({ user }: { user: User }) {
   const admin = user.role === 'admin';
   const [paid, setPaid] = useState(user.paid);
-  // The pack is paid: unlock it and count the sale for Meta (once per customer, however we found out).
+  // The pack is paid: unlock it and count the sale for Meta (once per customer, however we found out). The event ID
+  // matches the server's report of the same sale, so Meta counts it once.
   const unlock = (amount?: number) => {
     setPaid(true);
     trackPixel('Purchase', { content_name: 'Diwali Pack', value: amount ?? price ?? priceNow(), currency: 'INR', num_items: 1 }, { once: `pack-${user.id}` });
@@ -85,7 +86,8 @@ export default function App({ user }: { user: User }) {
     const post = q.get('post');
     if (post) {
       setChatId(post);
-      if (q.get('paid') === '1') trackPixel('Purchase', { content_name: 'New design', value: 199, currency: 'INR', num_items: 1 });
+      // Same event ID as the server's report of this sale (order id), so Meta counts it once.
+      if (q.get('paid') === '1') trackPixel('Purchase', { content_name: 'New design', value: 199, currency: 'INR', num_items: 1 }, { once: `redo-${q.get('order') ?? post}` });
     } else if (q.get('paid') === '0') setPayment('failed');
     else if (q.get('paid') && !user.paid) setPayment('wait');
     // Back from PhonePe already confirmed: the sale still counts.
@@ -106,10 +108,7 @@ export default function App({ user }: { user: User }) {
 
   async function pay() {
     try {
-      const { url } = await api.payPack();
-      trackPixel('AddPaymentInfo', { content_name: 'Diwali Pack', value: price ?? priceNow(), currency: 'INR' });
-      await pixelFlush();
-      location.href = url;
+      location.href = (await api.payPack()).url;
     } catch (e) {
       setOffline(e instanceof Error ? e.message : 'Something went wrong.');
     }
@@ -163,7 +162,6 @@ export default function App({ user }: { user: User }) {
       });
       upsert(job);
       if (job.chatId) setChatId(job.chatId);
-      if (!admin) trackPixel('PostCreated', { festival: input.request ?? '' }, { once: user.id, custom: true });
     } catch (e) {
       setOffline(e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
@@ -199,10 +197,7 @@ export default function App({ user }: { user: User }) {
         asPage
         brand={null}
         onClose={() => {}}
-        onSaved={(b) => {
-          if (!admin) trackPixel('CompleteRegistration', { content_name: 'Business setup', status: 'complete' }, { once: user.id });
-          setBrand(b);
-        }}
+        onSaved={setBrand}
         signupContact={user.contact ? { contact: user.contact, endCard: user.endCard ?? true } : undefined}
       />
     );
@@ -282,11 +277,7 @@ export default function App({ user }: { user: User }) {
                       pending: redos.some((r) => r.chatId === image.chatId),
                       onRequest: async () => {
                         const r = await api.requestRedo(image.id);
-                        if ('url' in r) {
-                          trackPixel('AddPaymentInfo', { content_name: 'New design', value: 199, currency: 'INR' });
-                          await pixelFlush();
-                          return void (location.href = r.url);
-                        }
+                        if ('url' in r) return void (location.href = r.url);
                         setRedos((list) => [...list.filter((x) => x.id !== r.id), r]);
                       },
                     }
