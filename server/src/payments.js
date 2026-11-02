@@ -11,7 +11,7 @@ import { fetchRetry } from './providers/http.js';
 
 export const onlinePayments = () => Boolean(process.env.PHONEPE_CLIENT_ID && process.env.PHONEPE_CLIENT_SECRET);
 
-const production = () => process.env.PHONEPE_ENV === 'production';
+const production = () => process.env.PHONEPE_ENV?.trim().toLowerCase() === 'production';
 const authUrl = () =>
   production() ? 'https://api.phonepe.com/apis/identity-manager/v1/oauth/token' : 'https://api-preprod.phonepe.com/apis/pg-sandbox/v1/oauth/token';
 const pgUrl = (path) => (production() ? 'https://api.phonepe.com/apis/pg' : 'https://api-preprod.phonepe.com/apis/pg-sandbox') + path;
