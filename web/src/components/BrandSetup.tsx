@@ -4,6 +4,7 @@ import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, api } from '../api';
 import type { Brand, Contact, LogoBg, LogoPreview } from '../types';
 import { APP_NAME } from '../config';
 import { Logo } from './Logo';
+import { Support } from './Support';
 
 interface Props {
   brand: Brand | null;
@@ -72,7 +73,8 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signupContact }: P
   const [step, setStep] = useState(0);
   const key = steps[step].key;
   const [industry, setIndustry] = useState(brand?.industry ?? '');
-  const [website, setWebsite] = useState(brand?.website ?? '');
+  // A new customer already gave their website when signing up: start from it.
+  const [website, setWebsite] = useState(brand?.website ?? signupContact?.contact.website ?? '');
   const [featured, setFeatured] = useState<string[]>(brand?.featured ?? []);
   const [draft, setDraft] = useState('');
   const [name, setName] = useState(brand?.name ?? '');
@@ -218,7 +220,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signupContact }: P
 
   return (
     <div
-      className={asPage ? 'relative isolate grid h-full place-items-center overflow-y-auto overflow-x-hidden overscroll-contain p-4' : 'fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm'}
+      className={asPage ? 'relative isolate grid h-full place-items-center [align-content:safe_center] overflow-y-auto overflow-x-hidden overscroll-contain p-4' : 'fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm'}
       onClick={asPage ? undefined : onClose}
     >
       {asPage && <div className="aurora -z-10" />}
@@ -633,6 +635,7 @@ export function BrandSetup({ brand, onSaved, onClose, asPage, signupContact }: P
           </form>
         )}
       </div>
+      {asPage && <Support text="Stuck on a step?" message="Hi, I need help setting up my Digiteq Studio posts" className="mt-5" />}
     </div>
   );
 }

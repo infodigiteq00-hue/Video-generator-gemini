@@ -18,7 +18,9 @@ export const OFFER = {
   seats: 100,
   showTakenFrom: 10,
   /** Indian mobile with country code, e.g. '919876543210'. Empty hides the WhatsApp buttons. */
-  whatsapp: '',
+  whatsapp: '919067610118',
+  /** Our team's number for questions and help: shown on every screen as Call and WhatsApp. */
+  support: '9067610118',
   /** Real quotes from customers. The reviews section stays hidden while this is empty. */
   testimonials: [] as Testimonial[],
 };
@@ -26,4 +28,5 @@ export const OFFER = {
 export const launchOn = () => new Date() <= new Date(`${OFFER.launchEnds}T23:59:59`);
 export const priceNow = () => (launchOn() ? OFFER.price : OFFER.regularPrice);
 export const rupees = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+export const supportLabel = () => `+91 ${OFFER.support.slice(0, 5)} ${OFFER.support.slice(5)}`;
 export const whatsappLink = (text: string) => (OFFER.whatsapp ? `https://wa.me/${OFFER.whatsapp}?text=${encodeURIComponent(text)}` : null);

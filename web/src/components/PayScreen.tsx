@@ -6,6 +6,7 @@ import { OFFER, rupees } from '../offer';
 import type { Pack } from '../types';
 import { Logo } from './Logo';
 import { PayBox } from './PayBox';
+import { Support } from './Support';
 
 interface Props {
   pack: Pack;
@@ -87,6 +88,11 @@ export function PayScreen({ pack, online, price, state, error, onPay }: Props) {
             )}
           </>
         )}
+        <Support
+          text={state === 'wait' ? 'Taking more than a few minutes?' : 'Questions about paying?'}
+          message={state === 'wait' ? `Hi, I paid for the ${pack.name} but it is still confirming` : `Hi, I have a question about paying for the ${pack.name}`}
+          className="mt-5 border-t border-white/[0.06] pt-4"
+        />
       </div>
     </div>
   );

@@ -108,12 +108,15 @@ export default function App({ user }: { user: User }) {
     return () => clearInterval(t);
   }, [redos, refresh]);
 
-  // Until the payment is confirmed, check every 15 s so the pack unlocks on its own.
+  // Until the payment is confirmed, check now and every 15 s so the pack unlocks on its own: also when the customer
+  // paid but closed PhonePe before coming back, or our team confirmed it.
   useEffect(() => {
-    if (paid) return;
-    const t = setInterval(() => void api.me().then((u) => u.paid && setPaid(true), () => {}), 15000);
+    if (paid || admin) return;
+    const tick = () => void api.payStatus().then((r) => r.state === 'paid' && setPaid(true), () => {});
+    tick();
+    const t = setInterval(tick, 15000);
     return () => clearInterval(t);
-  }, [paid]);
+  }, [paid, admin]);
 
   // One post per chat id: the brand image plus the video made from it.
   const posts: ChatSummary[] = useMemo(

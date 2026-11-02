@@ -1,6 +1,7 @@
 import { ChevronRight, Film, Image as ImageIcon, Loader2, Lock, Sparkles } from 'lucide-react';
 import { nextDate, when } from '../festivals';
 import { isActiveStatus, type Brand, type Job, type Pack } from '../types';
+import { Support } from './Support';
 
 interface Props {
   pack: Pack;
@@ -82,6 +83,7 @@ export function PackHome({ pack, brand, paid, jobs, busy, error, onGenerate, onO
           {error}
         </p>
       )}
+      <Support message="Hi, I need help with my Diwali Pack posts" className="mt-8" />
     </div>
   );
 }

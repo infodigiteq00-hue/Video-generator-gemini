@@ -6,6 +6,7 @@ import { go } from '../Gate';
 import { OFFER } from '../offer';
 import type { User } from '../types';
 import { Logo } from './Logo';
+import { Support } from './Support';
 
 export function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
   const [email, setEmail] = useState('');
@@ -70,6 +71,7 @@ export function Login({ onSignedIn }: { onSignedIn: (u: User) => void }) {
             Get the {OFFER.pack}
           </button>
         </p>
+        <Support text="Can’t log in?" message="Hi, I can’t log in to Digiteq Studio" className="mt-5 border-t border-white/[0.06] pt-4" />
       </form>
     </div>
   );

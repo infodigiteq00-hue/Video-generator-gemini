@@ -1,8 +1,9 @@
-import { Download, LogOut, MessageSquare, Plus, SquarePen, Users, X } from 'lucide-react';
+import { Download, LifeBuoy, LogOut, MessageSquare, Plus, SquarePen, Users, X } from 'lucide-react';
 import { api } from '../api';
 import { useState } from 'react';
 import { useInstall } from '../hooks/useInstall';
 import { APP_NAME } from '../config';
+import { OFFER, supportLabel, whatsappLink } from '../offer';
 import type { Brand, PageId } from '../types';
 import { Logo } from './Logo';
 
@@ -115,6 +116,14 @@ export function Sidebar({ open, onClose, chats, chatId, page, onNewChat, onOpenC
               )}
             </div>
           )}
+          <a
+            href={whatsappLink('Hi, I need help with Digiteq Studio') ?? `tel:+91${OFFER.support}`}
+            target="_blank"
+            rel="noreferrer"
+            className="press flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[12.5px] text-[color:var(--text-2)] hover:bg-white/[0.05] hover:text-[color:var(--text)]"
+          >
+            <LifeBuoy className="h-3.5 w-3.5" /> Help: <span className="mono-num text-[color:var(--text)]">{supportLabel()}</span>
+          </a>
           <button
             className="press flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[12.5px] text-[color:var(--text-2)] hover:bg-white/[0.05] hover:text-[color:var(--text)]"
             onClick={() => void api.logout().finally(() => window.dispatchEvent(new Event('auth:expired')))}

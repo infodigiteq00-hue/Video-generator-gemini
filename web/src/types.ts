@@ -117,6 +117,14 @@ export interface User {
 export interface Customer extends User {
   business: string | null;
   posts: number;
+  /** Their latest PhonePe payment for the pack: opened PhonePe but not finished ('created'), 'failed' or 'paid'. */
+  payment: 'created' | 'failed' | 'paid' | null;
+}
+
+/** Paid online, for the admin dashboard (amounts in rupees). */
+export interface AdminStats {
+  pack: { count: number; amount: number };
+  redo: { count: number; amount: number };
 }
 
 export interface CreateJobInput {

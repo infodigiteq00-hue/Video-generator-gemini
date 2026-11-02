@@ -93,8 +93,13 @@ All `/api` routes need a session cookie except: `POST /api/login`, `POST /api/lo
 - `POST /api/signup` multipart: the brand fields of `POST /api/brands` plus `email` and/or `phone`, `password` → `201 User` (payment pending, signed in)
 - `GET /api/invites/:token` → `{ email, phone }`; `POST /api/invites/:token` `{ email, phone, password }` → `201 User` (paid, signed in)
 - `GET /api/public/stats` → `{ paid }` (paid customer accounts)
-- Admin: `GET /api/admin/users` → customers with `business` and `posts`; `POST /api/admin/users/:id` `{ paid }`;
+- Admin: `GET /api/admin/users` → customers with `business`, `posts` (posts made) and `payment` (latest PhonePe pack
+  payment: `created` | `failed` | `paid` | `null`); `POST /api/admin/users/:id` `{ paid }`;
+  `POST /api/admin/users/:id/check` → `{ state }` (asks PhonePe about their latest pack payment now);
+  `GET /api/admin/stats` → `{ pack: { count, amount }, redo: { count, amount } }` (paid online, rupees);
   `POST /api/admin/invites` `{ email, phone }` → `{ url }`
+- `GET /api/pay/status` → `{ state }`: `paid` once the account is unlocked; otherwise asks PhonePe about the latest
+  pack payment (`pending` | `failed`), or `none`. The app calls it on opening and every 15 s until paid.
 - `GET /api/config` also returns `pack: { name, festivals, video, designs }`.
 - `POST /api/brand-posts` for customers: `402` until paid; `400` for a festival outside the pack or after `designs` posts for it.
 

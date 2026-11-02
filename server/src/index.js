@@ -217,8 +217,9 @@ app.get('/api/pay/return', async (req, res) => {
 
 // While PhonePe is still confirming the pack payment, the app asks here every few seconds.
 app.get('/api/pay/status', async (req, res) => {
+  if (req.user.paid) return res.json({ state: 'paid' });
   const row = db.prepare("SELECT * FROM payments WHERE kind = 'pack' AND ref = ? ORDER BY createdAt DESC").get(req.user.id);
-  if (!row) return res.json({ state: req.user.paid ? 'paid' : 'none' });
+  if (!row) return res.json({ state: 'none' });
   res.json({ state: await check(row).catch(() => 'pending') });
 });
 
@@ -249,12 +250,36 @@ app.post('/api/signup', express.json(), (req, res) => {
   }
 });
 
+const lastPack = (userId) => db.prepare("SELECT * FROM payments WHERE kind = 'pack' AND ref = ? ORDER BY createdAt DESC").get(userId);
 app.get('/api/admin/users', requireAdmin, (_req, res) => {
   res.json(
     listUsers()
       .filter((u) => u.role === 'customer')
-      .map((u) => ({ ...toPublicUser(u), business: brandOf(u.id)?.name ?? null, posts: listJobs(u.id).filter((j) => j.kind === 'image').length })),
+      .map((u) => ({
+        ...toPublicUser(u),
+        business: brandOf(u.id)?.name ?? null,
+        // Posts actually made (one per post, however many tries it took).
+        posts: new Set(listJobs(u.id).filter((j) => j.kind === 'image' && j.status === 'succeeded' && !j.auto).map((j) => j.chatId ?? j.id)).size,
+        // Their latest PhonePe payment for the pack: 'created' (opened PhonePe, not finished), 'failed' or 'paid'.
+        payment: lastPack(u.id)?.status ?? null,
+      })),
   );
+});
+// Money collected online, for the dashboard.
+app.get('/api/admin/stats', requireAdmin, (_req, res) => {
+  const rows = db.prepare("SELECT kind, COUNT(*) AS count, SUM(amount) AS amount FROM payments WHERE status = 'paid' GROUP BY kind").all();
+  const sum = (kind) => rows.find((r) => r.kind === kind);
+  res.json(Object.fromEntries(['pack', 'redo'].map((k) => [k, { count: sum(k)?.count ?? 0, amount: sum(k)?.amount ?? 0 }])));
+});
+// Ask PhonePe about a customer's latest pack payment now (e.g. they say they paid but the app still asks).
+app.post('/api/admin/users/:id/check', requireAdmin, async (req, res) => {
+  const row = lastPack(req.params.id);
+  if (!row || !onlinePayments()) return res.json({ state: 'none' });
+  try {
+    res.json({ state: await check(row) });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
 });
 app.post('/api/admin/users/:id', requireAdmin, express.json(), (req, res) => {
   setPaid(req.params.id, Boolean(req.body?.paid));

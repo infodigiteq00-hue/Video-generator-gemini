@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, KeyRound, Loader2, MessageCircle, RotateCcw, UserPlus } from 'lucide-react';
+import { Check, Copy, KeyRound, Loader2, MessageCircle, Phone, RefreshCw, RotateCcw, UserPlus } from 'lucide-react';
 import { api } from '../api';
-import type { AdminRedo, Customer } from '../types';
+import { rupees } from '../offer';
+import type { AdminRedo, AdminStats, Customer } from '../types';
 
 const field =
   'w-full rounded-2xl bg-white/[0.05] px-4 py-2.5 text-[15px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]';
 
-/** Admin: customers, confirming their payments, and invite links for people who paid but couldn't sign up. */
+type Filter = 'all' | 'unpaid' | 'paid';
+
+/** Admin: the signup-to-paid counters, customers, confirming their payments, and invite links for people who paid but
+ *  couldn't sign up. */
 export function Customers() {
   const [list, setList] = useState<Customer[] | null>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
   const [redos, setRedos] = useState<AdminRedo[]>([]);
   const [making, setMaking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +25,7 @@ export function Customers() {
 
   const load = () => {
     void api.adminRedos().then(setRedos, () => {});
+    void api.adminStats().then(setStats, () => {});
     return api.customers().then(setList, (e: Error) => setError(e.message));
   };
 
@@ -48,14 +55,47 @@ export function Customers() {
   }
 
   const phone = invite.phone.replace(/\D/g, '').slice(-10);
-  const pending = list?.filter((c) => !c.paid).length ?? 0;
+  const all = list ?? [];
+  const today = new Date().toDateString();
+  const isToday = (c: Customer) => new Date(c.createdAt).toDateString() === today;
+  const paidOnes = all.filter((c) => c.paid);
+  const shown = all
+    .filter((c) => (filter === 'paid' ? c.paid : filter === 'unpaid' ? !c.paid : true))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const share = (n: number) => (all.length ? `${Math.round((n / all.length) * 100)}% of sign-ups` : '');
+  // The funnel, in order: filled the form → opened PhonePe → paid → told us about the business → made a post.
+  const counters = [
+    { label: 'Filled the form', value: all.length, note: `${all.filter(isToday).length} today` },
+    { label: 'Opened payment', value: all.filter((c) => c.payment || c.paid).length, note: share(all.filter((c) => c.payment || c.paid).length) },
+    { label: 'Paid', value: paidOnes.length, note: share(paidOnes.length), strong: true },
+    { label: 'Set up business', value: all.filter((c) => c.business).length, note: share(all.filter((c) => c.business).length) },
+    { label: 'Made a post', value: all.filter((c) => c.posts > 0).length, note: share(all.filter((c) => c.posts > 0).length) },
+    {
+      label: 'Collected online',
+      value: stats ? rupees(stats.pack.amount + stats.redo.amount) : '…',
+      note: stats ? `${stats.pack.count} packs · ${stats.redo.count} new designs` : '',
+    },
+  ];
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
       <h1 className="text-[24px] font-semibold tracking-[-0.02em]">Customers</h1>
       <p className="mt-1 text-[14px] text-[color:var(--text-2)]">
-        {list ? `${list.length} accounts · ${pending} waiting for payment confirmation` : 'Loading…'}
+        {list ? `${all.length} sign-ups · ${paidOnes.length} paid · ${all.length - paidOnes.length} not paid yet` : 'Loading…'}
       </p>
+
+      <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        {counters.map((c) => (
+          <div
+            key={c.label}
+            className={`rounded-2xl p-4 ring-1 ${c.strong ? 'bg-[#30d158]/[0.08] ring-[#30d158]/30' : 'bg-white/[0.03] ring-white/[0.06]'}`}
+          >
+            <div className="text-[12.5px] text-[color:var(--text-2)]">{c.label}</div>
+            <div className={`mono-num mt-1 text-[26px] font-semibold tracking-[-0.03em] ${c.strong ? 'text-[color:var(--green)]' : ''}`}>{c.value}</div>
+            <div className="mt-0.5 h-4 text-[12px] text-[color:var(--text-3)]">{c.note}</div>
+          </div>
+        ))}
+      </div>
 
       {redos.length > 0 && (
         <section className="mt-6 rounded-3xl bg-[color:var(--amber)]/[0.07] p-5 ring-1 ring-[color:var(--amber)]/25">
@@ -135,9 +175,29 @@ export function Customers() {
         </p>
       )}
 
-      <ul className="mt-6 divide-y divide-white/[0.06] rounded-3xl bg-white/[0.03] ring-1 ring-white/[0.06]">
-        {list?.length === 0 && <li className="p-5 text-[14px] text-[color:var(--text-3)]">No customers yet.</li>}
-        {list?.map((c) => (
+      <div className="mt-8 flex gap-1.5" role="tablist" aria-label="Show customers">
+        {(
+          [
+            ['all', `All ${all.length}`],
+            ['unpaid', `Not paid ${all.length - paidOnes.length}`],
+            ['paid', `Paid ${paidOnes.length}`],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={filter === id}
+            className={`press h-9 rounded-full px-4 text-[13px] font-medium ring-1 ${filter === id ? 'bg-white text-black ring-white' : 'bg-white/[0.04] text-[color:var(--text-2)] ring-white/[0.08] hover:text-[color:var(--text)]'}`}
+            onClick={() => setFilter(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <ul className="mt-3 divide-y divide-white/[0.06] rounded-3xl bg-white/[0.03] ring-1 ring-white/[0.06]">
+        {list && shown.length === 0 && <li className="p-5 text-[14px] text-[color:var(--text-3)]">No customers here yet.</li>}
+        {shown.map((c) => (
           <CustomerRow key={c.id} c={c} onPaid={() => void togglePaid(c)} onChanged={() => void load()} />
         ))}
       </ul>
@@ -153,7 +213,28 @@ function CustomerRow({ c, onPaid, onChanged }: { c: Customer; onPaid: () => void
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [reset, setReset] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [checking, setChecking] = useState(false);
   const phone = (c.phone ?? '').replace(/\D/g, '').slice(-10);
+  const reach = phone.length === 10 ? phone : (c.contact?.phone ?? '').replace(/\D/g, '').slice(-10);
+  // Where an unpaid customer stopped.
+  const stage = c.paid ? null : c.payment === 'created' ? 'Opened PhonePe, didn’t finish' : c.payment === 'failed' ? 'Payment failed' : 'Didn’t open payment';
+
+  async function checkPayment() {
+    setChecking(true);
+    setNote(null);
+    try {
+      const { state } = await api.checkPayment(c.id);
+      if (state === 'paid') onChanged();
+      setNote({
+        ok: state === 'paid',
+        text: { paid: 'PhonePe says paid. Their pack is unlocked.', failed: 'PhonePe says this payment failed.', pending: 'PhonePe says it is still pending.', none: 'No PhonePe payment to check.' }[state],
+      });
+    } catch (e) {
+      setNote({ ok: false, text: e instanceof Error ? e.message : 'Couldn’t reach PhonePe.' });
+    } finally {
+      setChecking(false);
+    }
+  }
 
   async function save() {
     setBusy(true);
@@ -187,9 +268,21 @@ function CustomerRow({ c, onPaid, onChanged }: { c: Customer; onPaid: () => void
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-medium">{c.business ?? 'No business yet'}</div>
           <div className="truncate text-[12.5px] text-[color:var(--text-2)]">
-            {[c.phone, c.email].filter(Boolean).join(' · ')} · {c.posts} posts · joined {new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            {[c.phone, c.email].filter(Boolean).join(' · ')} · {c.posts} posts · joined{' '}
+            {new Date(c.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
           </div>
+          {stage && <div className="mt-1 text-[12px] font-medium text-[color:var(--amber)]">{stage}</div>}
         </div>
+        {reach.length === 10 && !c.paid && (
+          <a className="btn-quiet h-9" href={`tel:+91${reach}`} aria-label={`Call ${reach}`}>
+            <Phone className="h-4 w-4" />
+          </a>
+        )}
+        {!c.paid && c.payment === 'created' && (
+          <button className="btn-quiet h-9" disabled={checking} onClick={() => void checkPayment()}>
+            {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Check with PhonePe
+          </button>
+        )}
         <button className="btn-quiet h-9" aria-expanded={open} onClick={() => setOpen(!open)}>
           <KeyRound className="h-4 w-4" /> Login help
         </button>
@@ -247,9 +340,9 @@ function CustomerRow({ c, onPaid, onChanged }: { c: Customer; onPaid: () => void
               </div>
             )}
           </div>
-          {note && <p className={`text-[13px] ${note.ok ? 'text-[color:var(--green)]' : 'text-[color:var(--red)]'}`}>{note.text}</p>}
         </div>
       )}
+      {note && <p className={`mt-2 text-[13px] ${note.ok ? 'text-[color:var(--green)]' : 'text-[color:var(--red)]'}`}>{note.text}</p>}
     </li>
   );
 }

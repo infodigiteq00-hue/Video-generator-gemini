@@ -9,9 +9,10 @@ import crypto from 'node:crypto';
 import { db } from './db.js';
 import { fetchRetry } from './providers/http.js';
 
-export const onlinePayments = () => Boolean(process.env.PHONEPE_CLIENT_ID && process.env.PHONEPE_CLIENT_SECRET);
+const env = (name) => process.env[name]?.trim() || '';
+export const onlinePayments = () => Boolean(env('PHONEPE_CLIENT_ID') && env('PHONEPE_CLIENT_SECRET'));
 
-const production = () => process.env.PHONEPE_ENV?.trim().toLowerCase() === 'production';
+const production = () => env('PHONEPE_ENV').toLowerCase() === 'production';
 const authUrl = () =>
   production() ? 'https://api.phonepe.com/apis/identity-manager/v1/oauth/token' : 'https://api-preprod.phonepe.com/apis/pg-sandbox/v1/oauth/token';
 const pgUrl = (path) => (production() ? 'https://api.phonepe.com/apis/pg' : 'https://api-preprod.phonepe.com/apis/pg-sandbox') + path;
@@ -24,9 +25,9 @@ async function accessToken() {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: process.env.PHONEPE_CLIENT_ID,
-      client_version: process.env.PHONEPE_CLIENT_VERSION || '1',
-      client_secret: process.env.PHONEPE_CLIENT_SECRET,
+      client_id: env('PHONEPE_CLIENT_ID'),
+      client_version: env('PHONEPE_CLIENT_VERSION') || '1',
+      client_secret: env('PHONEPE_CLIENT_SECRET'),
       grant_type: 'client_credentials',
     }),
   });
@@ -76,6 +77,7 @@ export async function checkPayment(id) {
   const row = getPayment(id);
   if (!row) return { state: 'failed', fresh: false };
   if (row.status === 'paid') return { state: 'paid', fresh: false };
+  if (row.status === 'failed') return { state: 'failed', fresh: false }; // final at PhonePe: no need to ask again
   const order = await phonepe('GET', `/checkout/v2/order/${encodeURIComponent(id)}/status?details=false`);
   if (order.state === 'FAILED') {
     db.prepare("UPDATE payments SET status = 'failed' WHERE id = ? AND status = 'created'").run(id);

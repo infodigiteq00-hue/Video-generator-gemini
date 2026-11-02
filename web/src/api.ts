@@ -1,5 +1,5 @@
 import { at } from './config';
-import type { AdminRedo, AppConfig, Brand, Contact, BrandInput, BrandPostInput, CreateJobInput, Customer, Job, LogoPlace, LogoPreview, Redo, User } from './types';
+import type { AdminRedo, AppConfig, Brand, Contact, BrandInput, BrandPostInput, CreateJobInput, Customer, Job, LogoPlace, LogoPreview, Redo, User, AdminStats } from './types';
 
 function brandForm(input: BrandInput) {
   const fd = new FormData();
@@ -151,6 +151,15 @@ export const api = {
 
   customers(): Promise<Customer[]> {
     return request<Customer[]>('/api/admin/users');
+  },
+
+  adminStats(): Promise<AdminStats> {
+    return request<AdminStats>('/api/admin/stats');
+  },
+
+  /** Ask PhonePe about a customer's latest pack payment now. */
+  checkPayment(id: string): Promise<{ state: 'paid' | 'failed' | 'pending' | 'none' }> {
+    return request(`/api/admin/users/${encodeURIComponent(id)}/check`, { method: 'POST' });
   },
 
   setPaid(id: string, paid: boolean): Promise<void> {

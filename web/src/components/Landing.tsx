@@ -8,6 +8,7 @@ import { APP_NAME, at } from '../config';
 import { nextDate } from '../festivals';
 import { go } from '../Gate';
 import { OFFER, launchOn, priceNow, rupees, whatsappLink } from '../offer';
+import { Support } from './Support';
 import { Logo } from './Logo';
 
 // Keep in step with PACK in server/src/index.js.
@@ -514,7 +515,8 @@ export function Landing() {
         <Cta className="mt-8 w-full max-w-sm">
           Get my {OFFER.pack} for {rupees(price)} <ArrowRight className="h-5 w-5" />
         </Cta>
-        <p className="mt-10 text-[12px] leading-relaxed text-[color:var(--text-3)]">
+        <Support className="mt-10" />
+        <p className="mt-8 text-[12px] leading-relaxed text-[color:var(--text-3)]">
           {APP_NAME} is a product by the team behind{' '}
           <a href="https://www.quotegen.ai" className="underline underline-offset-2 hover:text-[color:var(--text-2)]">
             QuoteGen.ai
