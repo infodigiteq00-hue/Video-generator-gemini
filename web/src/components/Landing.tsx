@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowRight, CalendarClock, Check, Clock, Download, Film, Image as ImageIcon, MessageCircle, Palette, Phone,
+  ArrowRight, CalendarClock, Check, Clock, Download, Film, Image as ImageIcon, Palette, Phone,
   ShieldCheck, Sparkles, Star, Stamp, Store, Timer, Wand2,
 } from 'lucide-react';
 import { api } from '../api';
 import { APP_NAME, at } from '../config';
 import { nextDate } from '../festivals';
 import { go } from '../Gate';
-import { OFFER, launchOn, priceNow, rupees, whatsappLink } from '../offer';
-import { Support } from './Support';
+import { OFFER, launchOn, priceNow, rupees } from '../offer';
 import { Logo } from './Logo';
 
 // Keep in step with PACK in server/src/index.js.
@@ -179,7 +178,6 @@ export function Landing() {
   const [taken, setTaken] = useState<number | null>(null);
   const [sticky, setSticky] = useState(false);
   const hero = useRef<HTMLDivElement>(null);
-  const wa = whatsappLink(`Hi, I have a question about the ${OFFER.pack}`);
   const reviews = OFFER.testimonials;
   const rating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
 
@@ -515,7 +513,6 @@ export function Landing() {
         <Cta className="mt-8 w-full max-w-sm">
           Get my {OFFER.pack} for {rupees(price)} <ArrowRight className="h-5 w-5" />
         </Cta>
-        <Support className="mt-10" />
         <p className="mt-8 text-[12px] leading-relaxed text-[color:var(--text-3)]">
           {APP_NAME} is a product by the team behind{' '}
           <a href="https://www.quotegen.ai" className="underline underline-offset-2 hover:text-[color:var(--text-2)]">
@@ -525,7 +522,7 @@ export function Landing() {
         </p>
       </section>
 
-      {/* ---- Sticky price bar (phones) and WhatsApp ---- */}
+      {/* ---- Sticky price bar (phones) ---- */}
       <div
         className={`fixed inset-x-0 bottom-0 z-40 border-t md:hidden border-white/[0.08] bg-[rgba(10,10,12,0.92)] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl transition-transform duration-500 [transition-timing-function:var(--spring)] ${sticky ? 'translate-y-0' : 'translate-y-full'}`}
       >
@@ -542,17 +539,6 @@ export function Landing() {
           </Cta>
         </div>
       </div>
-      {wa && (
-        <a
-          href={wa}
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Chat with us on WhatsApp"
-          className={`press fixed right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-[#25d366] text-white shadow-lg transition-[bottom] duration-500 ${sticky ? 'bottom-24 md:bottom-5' : 'bottom-5'}`}
-        >
-          <MessageCircle className="h-6 w-6" />
-        </a>
-      )}
     </div>
   );
 }

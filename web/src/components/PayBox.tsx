@@ -1,10 +1,10 @@
 import { MessageCircle, QrCode } from 'lucide-react';
 import { rupees, whatsappLink } from '../offer';
 
-/** A payment: the UPI QR code (a placeholder until real payments are set up), the amount, and what happens next.
+/** A payment (`stuck`: a WhatsApp help message, only for customers who have already paid for the pack): the UPI QR code (a placeholder until real payments are set up), the amount, and what happens next.
  *  Payments are confirmed by an admin for now. */
-export function PayBox({ amount, label, steps, stuck }: { amount: number; label: string; steps: string[]; stuck: string }) {
-  const wa = whatsappLink(stuck);
+export function PayBox({ amount, label, steps, stuck }: { amount: number; label: string; steps: string[]; stuck?: string }) {
+  const wa = stuck ? whatsappLink(stuck) : null;
   return (
     <div className="space-y-5">
       <div className="mx-auto w-full max-w-[240px] rounded-3xl bg-white p-4 text-center text-black">

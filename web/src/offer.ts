@@ -19,7 +19,7 @@ export const OFFER = {
   showTakenFrom: 10,
   /** Indian mobile with country code, e.g. '919876543210'. Empty hides the WhatsApp buttons. */
   whatsapp: '919067610118',
-  /** Our team's number for questions and help: shown on every screen as Call and WhatsApp. */
+  /** Our team's number for questions and help: shown only once the pack is paid (setup, pack home, menu). */
   support: '9067610118',
   /** Real quotes from customers. The reviews section stays hidden while this is empty. */
   testimonials: [] as Testimonial[],

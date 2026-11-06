@@ -6,7 +6,6 @@ import { go } from '../Gate';
 import { OFFER, priceNow, rupees } from '../offer';
 import type { Contact, User } from '../types';
 import { Logo } from './Logo';
-import { Support } from './Support';
 import { setPixelUser } from '../metaPixel';
 
 const input =
@@ -147,7 +146,6 @@ export function Signup({ onSignedIn }: { onSignedIn: (u: User) => void }) {
               Log in
             </button>
           </p>
-          <Support className="border-t border-white/[0.06] pt-4" />
         </div>
       </form>
     </div>

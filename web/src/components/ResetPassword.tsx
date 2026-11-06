@@ -5,7 +5,6 @@ import { APP_NAME } from '../config';
 import { go } from '../Gate';
 import type { User } from '../types';
 import { Logo } from './Logo';
-import { Support } from './Support';
 
 const field =
   'w-full rounded-2xl bg-white/[0.05] px-4 py-3 text-[16px] outline-none ring-1 ring-white/[0.08] placeholder:text-[color:var(--text-3)] focus:ring-[color:var(--violet)]';
@@ -79,7 +78,6 @@ export function ResetPassword({ token, onSignedIn }: { token: string; onSignedIn
             </button>
           )
         )}
-        <Support text="Need help?" message="Hi, I need help setting my Digiteq Studio password" className="mt-5 border-t border-white/[0.06] pt-4" />
       </form>
     </div>
   );
