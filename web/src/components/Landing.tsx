@@ -128,18 +128,14 @@ function left(to: string, now: number) {
 const pad = (n: number) => String(n).padStart(2, '0');
 const dateLabel = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
-function Countdown({ to, now, className = 'justify-center' }: { to: string; now: number; className?: string }) {
+function Countdown({ to, now, className = 'justify-center', hours = false }: { to: string; now: number; className?: string; hours?: boolean }) {
   const t = left(to, now);
+  const parts = hours
+    ? ([[t.d * 24 + t.h, 'hrs'], [t.m, 'min'], [t.s, 'sec']] as const)
+    : ([[t.d, 'days'], [t.h, 'hrs'], [t.m, 'min'], [t.s, 'sec']] as const);
   return (
     <div className={`flex items-center gap-1.5 ${className}`} aria-label={`${t.d} days ${t.h} hours ${t.m} minutes left`}>
-      {(
-        [
-          [t.d, 'days'],
-          [t.h, 'hrs'],
-          [t.m, 'min'],
-          [t.s, 'sec'],
-        ] as const
-      ).map(([v, u]) => (
+      {parts.map(([v, u]) => (
         <div key={u} className="min-w-[58px] rounded-2xl bg-white/[0.06] px-2 py-2 text-center ring-1 ring-white/[0.08]">
           <div className="mono-num text-[22px] font-semibold leading-none tracking-[-0.03em]">{pad(v)}</div>
           <div className="mt-1 text-[10.5px] uppercase tracking-[0.12em] text-[color:var(--text-3)]">{u}</div>
@@ -178,6 +174,8 @@ export function Landing() {
   // Days to Diwali, for the honest urgency once the launch price is over: posts are worth most before the festival.
   const toDiwali = diwali ? Math.round((new Date(`${diwali.date}T00:00:00`).getTime() - new Date(new Date(now).toDateString()).getTime()) / 86400000) : null;
   const diwaliSoon = toDiwali !== null && toDiwali <= 14;
+  const hoursToDiwali = diwali ? Math.max(0, Math.floor((new Date(`${diwali.date}T00:00:00`).getTime() - now) / 3600000)) : 0;
+  const hoursLine = hoursToDiwali === 1 ? 'Only 1 hour left to Diwali' : `Only ${hoursToDiwali} hours left to Diwali`;
   const diwaliLine = toDiwali === 0 ? 'Diwali is today' : toDiwali === 1 ? 'Diwali is tomorrow' : `Diwali is in ${toDiwali} days`;
   const [taken, setTaken] = useState<number | null>(null);
   const [sticky, setSticky] = useState(false);
@@ -269,9 +267,9 @@ export function Landing() {
           {diwali && (
             <div className="mx-auto mt-10 max-w-sm rounded-3xl bg-white/[0.03] p-4 ring-1 ring-white/[0.07] lg:mx-0 lg:mt-8 lg:max-w-md">
               <p className="mb-3 flex items-center justify-center gap-1.5 text-[13px] text-[color:var(--text-2)] lg:justify-start">
-                <Timer className="h-4 w-4 text-[#ffb347]" /> Diwali is on {dateLabel(diwali.date)}. Your customers are already scrolling.
+                <Timer className="h-4 w-4 text-[#ffb347]" /> {diwaliSoon && toDiwali! > 0 ? `${hoursLine}. Your customers are already scrolling.` : `Diwali is on ${dateLabel(diwali.date)}. Your customers are already scrolling.`}
               </p>
-              <Countdown to={`${diwali.date}T00:00:00`} now={now} className="justify-center lg:justify-start" />
+              <Countdown to={`${diwali.date}T00:00:00`} now={now} hours={diwaliSoon} className="justify-center lg:justify-start" />
             </div>
           )}
           </div>
@@ -464,12 +462,16 @@ export function Landing() {
           <Cta className="mt-7 w-full">
             Get my {OFFER.pack} <ArrowRight className="h-5 w-5" />
           </Cta>
+          {diwaliSoon && (
+            <div className="mt-5">
+              <p className="mb-2 text-center text-[12.5px] text-[color:var(--text-2)]">
+                {toDiwali === 0 ? 'Diwali is today. Your posts are ready in minutes.' : `${hoursLine}. Get your posts out before the festival.`}
+              </p>
+              {toDiwali! > 0 && <Countdown to={`${diwali!.date}T00:00:00`} now={now} hours />}
+            </div>
+          )}
           {launch && (
-            <div className="mt-5 space-y-3">
-              <div>
-                <p className="mb-2 text-center text-[12.5px] text-[color:var(--text-2)]">{new Date().toDateString() === new Date(`${OFFER.launchEnds}T00:00:00`).toDateString() ? `Last day at ${rupees(OFFER.price)}: goes to ${rupees(OFFER.regularPrice)} tomorrow` : `Launch price ends ${dateLabel(OFFER.launchEnds)}`}</p>
-                <Countdown to={`${OFFER.launchEnds}T23:59:59`} now={now} />
-              </div>
+            <div className="mt-4">
               <div>
                 <p className="mb-1.5 flex justify-between text-[12.5px] text-[color:var(--text-2)]">
                   <span>Only for the first {OFFER.seats} businesses</span>
@@ -485,14 +487,6 @@ export function Landing() {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-          {!launch && diwaliSoon && (
-            <div className="mt-5">
-              <p className="mb-2 text-center text-[12.5px] text-[color:var(--text-2)]">
-                {diwaliLine}. {toDiwali === 0 ? 'Your posts are ready in minutes.' : 'Get your posts out before the festival.'}
-              </p>
-              {toDiwali! > 0 && <Countdown to={`${diwali!.date}T00:00:00`} now={now} />}
             </div>
           )}
           <p className="mt-5 flex items-center justify-center gap-1.5 text-[12px] text-[color:var(--text-3)]">
