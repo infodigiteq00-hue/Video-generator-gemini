@@ -105,7 +105,7 @@ function InView({ src, poster, className }: { src: string; poster: string; class
 const FAQ = [
   ['Do I need a designer or any design skills?', 'No. Answer three questions about your business, upload your logo, and tap Generate on each festival. That’s it.'],
   ['Will it look like a template everyone else is using?', 'No. Every post is designed fresh for your business, around the products and services you tell us about, in your brand colours.'],
-  ['What exactly do I get for ' + rupees(OFFER.price) + '?', `${PACK.length} festival posts: ${PACK.map((f) => f.name).join(', ')}. ${PACK.filter((f) => f.video).map((f) => f.name).join(', ')} come as videos, the others as photo posts. All personalised for your business, in 9:16, ready for WhatsApp status, Instagram and Facebook.`],
+  ['What exactly do I get for ' + rupees(priceNow()) + '?', `${PACK.length} festival posts: ${PACK.map((f) => f.name).join(', ')}. ${PACK.filter((f) => f.video).map((f) => f.name).join(', ')} come as videos, the others as photo posts. All personalised for your business, in 9:16, ready for WhatsApp status, Instagram and Facebook.`],
   ['I don’t have a logo. Can I still use it?', 'Yes. Pick your brand colours instead and we design around them.'],
   ['How do I pay?', 'By UPI, with any app: Google Pay, PhonePe, Paytm or your bank app. Once your payment is confirmed, your pack unlocks.'],
   ['How fast will I get my posts?', 'A post takes a few minutes and the video a couple more. You can make each festival’s post as soon as your pack unlocks.'],
@@ -463,7 +463,7 @@ export function Landing() {
           {launch && (
             <div className="mt-5 space-y-3">
               <div>
-                <p className="mb-2 text-center text-[12.5px] text-[color:var(--text-2)]">Launch price ends {dateLabel(OFFER.launchEnds)}</p>
+                <p className="mb-2 text-center text-[12.5px] text-[color:var(--text-2)]">{new Date().toDateString() === new Date(`${OFFER.launchEnds}T00:00:00`).toDateString() ? `Last day at ${rupees(OFFER.price)}: goes to ${rupees(OFFER.regularPrice)} tomorrow` : `Launch price ends ${dateLabel(OFFER.launchEnds)}`}</p>
                 <Countdown to={`${OFFER.launchEnds}T23:59:59`} now={now} />
               </div>
               <div>

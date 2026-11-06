@@ -30,8 +30,8 @@ const PACK = {
   redoPrice: 199, // rupees
   // Rupees. Keep in step with web/src/offer.ts, which shows them on the landing page.
   price: 999,
-  regularPrice: 2999,
-  launchEnds: '2026-11-05', // the launch price applies to the end of this day (India time)
+  regularPrice: 1999,
+  launchEnds: '2026-11-06', // the launch price applies to the end of this day (India time)
 };
 const packPrice = () => (Date.now() <= Date.parse(`${PACK.launchEnds}T23:59:59+05:30`) ? PACK.price : PACK.regularPrice);
 const FORMAT = { aspectRatio: '9:16', imageSize: '2K', resolution: '720p', durationSeconds: 8 };

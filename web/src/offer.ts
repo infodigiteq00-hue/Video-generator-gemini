@@ -11,9 +11,9 @@ export interface Testimonial {
 export const OFFER = {
   pack: 'Diwali Pack',
   price: 999,
-  regularPrice: 2999,
+  regularPrice: 1999,
   /** The launch price ends at the end of this day; after it the regular price applies. */
-  launchEnds: '2026-11-05',
+  launchEnds: '2026-11-06',
   /** Founding customers at the launch price. The counter shows the real number of paid accounts once it reaches `showTakenFrom`. */
   seats: 100,
   showTakenFrom: 10,
