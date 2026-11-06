@@ -175,6 +175,10 @@ export function Landing() {
   const price = priceNow();
   const launch = launchOn();
   const diwali = nextDate('Diwali');
+  // Days to Diwali, for the honest urgency once the launch price is over: posts are worth most before the festival.
+  const toDiwali = diwali ? Math.round((new Date(`${diwali.date}T00:00:00`).getTime() - new Date(new Date(now).toDateString()).getTime()) / 86400000) : null;
+  const diwaliSoon = toDiwali !== null && toDiwali <= 14;
+  const diwaliLine = toDiwali === 0 ? 'Diwali is today' : toDiwali === 1 ? 'Diwali is tomorrow' : `Diwali is in ${toDiwali} days`;
   const [taken, setTaken] = useState<number | null>(null);
   const [sticky, setSticky] = useState(false);
   const hero = useRef<HTMLDivElement>(null);
@@ -232,7 +236,7 @@ export function Landing() {
         <div className="mx-auto grid max-w-6xl px-4 pb-14 pt-10 text-center sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-x-12 lg:px-8 lg:pb-24 lg:pt-20 lg:text-left">
           <div className="lg:col-start-1 lg:row-start-1 lg:self-end">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ffb347]/10 px-3 py-1.5 text-[12.5px] font-medium text-[#ffc56e] ring-1 ring-[#ffb347]/25">
-            <Sparkles className="h-3.5 w-3.5" /> Diwali {diwali ? new Date(diwali.date).getFullYear() : ''} · {launch ? 'Launch offer' : OFFER.pack}
+            <Sparkles className="h-3.5 w-3.5" /> {!launch && diwaliSoon ? diwaliLine : <>Diwali {diwali ? new Date(diwali.date).getFullYear() : ''} · {launch ? 'Launch offer' : OFFER.pack}</>}
           </span>
           <h1 className="mx-auto mt-5 max-w-3xl text-balance text-[clamp(2.4rem,10vw,4.6rem)] lg:mx-0 lg:text-[clamp(3.4rem,5.2vw,4.9rem)] font-semibold leading-[1.02] tracking-[-0.045em]">
             Your Diwali posts, designed for <span className="serif bg-[linear-gradient(135deg,#ffd27a,#ff8a3d)] bg-clip-text pr-[0.08em] font-normal text-transparent">your business.</span>
@@ -481,6 +485,14 @@ export function Landing() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+          {!launch && diwaliSoon && (
+            <div className="mt-5">
+              <p className="mb-2 text-center text-[12.5px] text-[color:var(--text-2)]">
+                {diwaliLine}. {toDiwali === 0 ? 'Your posts are ready in minutes.' : 'Get your posts out before the festival.'}
+              </p>
+              {toDiwali! > 0 && <Countdown to={`${diwali!.date}T00:00:00`} now={now} />}
             </div>
           )}
           <p className="mt-5 flex items-center justify-center gap-1.5 text-[12px] text-[color:var(--text-3)]">
